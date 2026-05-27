@@ -1,0 +1,140 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# Defaults shared by every per-dataset config; override per-dataset only
+# where the dataset actually differs from this recipe.
+
+# ---- Infrastructure (SLURM via exca / submitit) ----
+infra:
+  cluster: null
+  gpus_per_node: 1
+  cpus_per_task: 10
+
+seed: 33
+
+# ---- Data: extractors + windowing + splitter ----
+data:
+  duration: 8.0
+  batch_size: 16
+  num_workers: 0
+  training_overlap: 0.0
+
+  splitter_name: kfold
+  splitter_kwargs: {k_fold: 5, fold_index: 0, valid_seed: 0}
+
+  use_seizure_sampler: false       # turned on in shah2018.yaml
+  seizure_sampler_alpha: 0.0
+  seizure_sampler_beta: 0.0
+
+  preprocessor: null
+
+  neuro:
+    name: EegExtractor
+    frequency: 128.0
+    filter: [0.1, 100.0]
+    scaler: RobustScaler
+    clamp: 16
+
+  # Per-dataset YAMLs fill in event_types, mode, frequency, max_events,
+  # mapping. Required overrides on neuralset >= 0.2.2:
+  # - allow_missing=true: windows can legitimately contain zero events.
+  # - aggregation=cat: pass every event in the segment down to the
+  #   encoder (default 'single' raises for windows with >1 event,
+  #   which event detection always has).
+  features:
+    feature_start: {name: EventEncoder, allow_missing: true, aggregation: cat}
+    feature_end:   {name: EventEncoder, allow_missing: true, aggregation: cat}
+    feature_class: {name: EventEncoder, allow_missing: true, aggregation: cat}
+    dense_target:  {name: EventEncoder, allow_missing: true, aggregation: cat}
+
+# ---- Encoder: SimpleConv (optional ChannelMerger) + Perceiver bottleneck ----
+brain_model_config:
+  name: Encoder
+  dim: 128
+  encoder_config:
+    name: SimpleConv
+    dropout_input: 0.1
+    hidden: 512
+    batch_norm: true
+    depth: 10
+    kernel_size: 9
+    dilation_growth: 2.5
+    initial_linear: 256
+    initial_depth: 1
+    conv_dropout: 0.1
+    rewrite: true
+    scale: 0.1
+    gelu: true
+    merger_config:
+      name: ChannelMerger
+      n_virtual_channels: 270
+      # n_freqs must be nulled explicitly: neuraltrain's FourierEmb
+      # defaults n_freqs=12, and build() rejects both being set.
+      fourier_emb_config: {name: FourierEmb, n_freqs: null, total_dim: 2048}
+      dropout: 0.2
+  perceiver_config:
+    name: Perceiver
+    num_latents: 256
+    depth: 6
+    cross_heads: 2
+    latent_heads: 2
+    cross_dim_head: 64
+    latent_dim_head: 64
+
+# ---- Decoder: DETR-style, n_queries learnable event slots ----
+decoder_config:
+  name: Decoder
+  hidden_dim: 256
+  n_queries: 100                   # overridden per-dataset
+  transformer: {name: TransformerEncoder, depth: 4, heads: 4}
+  n_classes: -5                    # patched from feature_class mapping at init
+
+# ---- Loss inner modules (the 4 weights are at the bottom of this file) ----
+losses:
+  class_loss:       {name: CrossEntropyLoss}
+  iou_loss:         {name: IoULoss, mode: start_end}
+  dense_loss:       {name: CrossEntropyLoss}
+  consistency_loss: {name: KLDivLoss, kwargs: {reduction: none}}
+
+# ---- Optimiser + LR schedule ----
+optimizer:
+  optimizer: {name: AdamW, lr: 0.00005, kwargs: {weight_decay: 0.001}}
+  scheduler: {name: OneCycleLR, kwargs: {max_lr: 0.00005, pct_start: 0.1}}
+
+# ---- Metrics ----
+# Paper-aligned log names:
+#   f1_sample : per-timestep multilabel macro F1.
+#   f1_event  : class-aware F1 over event spans at IoU > 0.5.
+metrics:
+  - {log_name: f1_sample, name: MultilabelF1Score, kwargs: {average: macro, num_labels: -5}}
+  - {log_name: f1_event,  name: F1Event, iou_threshold: 0.5}
+
+# ---- Lightning Trainer ----
+strategy: auto
+accelerator: gpu
+precision: 32
+
+n_epochs: 100
+max_steps: -1
+val_check_interval: 1.0
+patience: 20
+
+enable_progress_bar: true
+accumulate_grad_batches: 1
+
+save_checkpoints: false
+monitor: val_f1_event
+monitor_mode: max
+
+# ---- Loss term weights (their sum is the total loss) ----
+weight_iou: 5.0
+weight_class: 1.0
+weight_dense: 1.0
+weight_consistency: 0.5
+
+# ---- Run control ----
+eval_only: false
+train_only: false
+checkpoint_path: null
+
+wandb_config: null

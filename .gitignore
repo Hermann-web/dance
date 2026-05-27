@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Lightning / training artifacts (should land under infra.folder, never CWD)
+lightning_logs/
+callbacks/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Hero GIF: not part of the public release for now. Regenerate locally via
+# scratch/jarod/dance_hero_gif/make_hero.py.
+dance/resources/dance_hero.gif

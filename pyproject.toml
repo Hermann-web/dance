@@ -1,0 +1,89 @@
+[project]
+name = "dance"
+version = "0.0.1"
+authors = [{name = "Meta FAIR"}]
+license = "MIT"
+license-files = ["LICENSE"]
+description = "DANCE: Detect and Classify Events in EEG"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    # Public PyPI versions only — the dance repo is meant to be installable
+    # on its own (`pip install dance`) once published to facebookresearch.
+    # neuraltrain 0.2.2 is the first release with the `dilation_growth: float`
+    # fix that the paper config (`dilation_growth=2.5`) needs; without it
+    # `Dance(...)` fails at SimpleConv pydantic validation.
+    "neuralset>=0.2.1",
+    "neuraltrain>=0.2.2",
+    "neuralfetch>=0.2.1",
+    "lightning>=2.0.8",
+    "x_transformers==1.44.4",
+    "perceiver_pytorch",
+    "torchmetrics>=1.1.2",
+    "pydantic>=2.5.0",
+    "submitit",
+    "exca>=0.5.20",
+    "scikit-learn>=1.0",
+    "pandas",
+    "numpy",
+]
+
+[project.optional-dependencies]
+    wandb = ["wandb>=0.15.11"]
+    dev = [
+        "pytest>=7",
+        "ruff",
+        "codespell[toml]",
+    ]
+
+[project.scripts]
+dance = "dance.cli.main:main"
+
+[project.urls]
+    Source = "https://github.com/facebookresearch/dance"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dance*"]
+exclude = ["dance.tests*", "dance.resources*", "dance.example*"]
+
+[tool.setuptools.package-data]
+"dance.configs" = ["*.yaml", "datasets/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["dance/tests"]
+markers = [
+    "slow: long-running tests (CI may skip)",
+    "requires_data: tests that need real EEG data on disk",
+]
+
+[tool.ruff]
+line-length = 90
+exclude = ["scratch", "__editable__", "*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "A", "B006", "PIE790"]
+ignore = ["E501", "E712", "E722", "E731", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dance"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"test_*.py" = ["F811"]
+"**/tests/**" = ["F811"]
+
+[tool.codespell]
+skip = '.git,*.css,./scratch/*,*/.venv/*,./openneuro/*'
+check-hidden = true
+ignore-regex = 'https?://\S+'
+ignore-words-list = 'fro,toi,rouge,fo,lond,te'

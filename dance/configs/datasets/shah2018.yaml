@@ -1,0 +1,66 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# Shah et al. 2018 (TUSZ v2.0.3) — 4-class seizure classification.
+
+data:
+  study:
+    name: Shah2018Tusz
+    query: null
+  duration: 256.0
+  batch_size: 4
+  training_overlap: 0.5
+
+  splitter_name: tusz_fixed
+  splitter_kwargs:
+    debug: false   # full TUSZ official train/dev/eval split
+
+  preprocessor:
+    name: SeizurePreprocessor
+
+  use_seizure_sampler: true
+  seizure_sampler_alpha: 0.01
+  seizure_sampler_beta: 5.0
+
+  features:
+    feature_start:  {event_types: Seizure, mode: event_start,      max_events: 1, frequency: 1.0}
+    feature_end:    {event_types: Seizure, mode: event_end,        max_events: 1, frequency: 1.0}
+    feature_class:
+      event_types: Seizure
+      mode: event_class
+      max_events: 1
+      frequency: 1.0
+      # Raw TUH codes collapsed into 4 categories: focal / generalized / absence / ct.
+      mapping:
+        "<no_event>": 0
+        fnsz: 1
+        cpsz: 1
+        spsz: 1
+        tnsz: 1
+        gnsz: 2
+        mysz: 2
+        absz: 3
+        tcsz: 4
+    dense_target:
+      event_types: Seizure
+      mode: dense_class
+      frequency: 1.0
+      mapping:
+        "<no_event>": 0
+        fnsz: 1
+        cpsz: 1
+        spsz: 1
+        tnsz: 1
+        gnsz: 2
+        mysz: 2
+        absz: 3
+        tcsz: 4
+
+decoder_config:
+  n_queries: 10
+
+n_epochs: 25
+patience: 999     # effectively no early stopping
+monitor: val_f1_sample
+monitor_mode: max
+save_checkpoints: true

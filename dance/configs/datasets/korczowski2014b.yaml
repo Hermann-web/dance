@@ -1,0 +1,27 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# Korczowski et al. 2014 (BI2014b) — visual P300, 38 subjects, 32 channels.
+
+data:
+  study:
+    name: Korczowski2019BrainBi2014B
+  duration: 32.0
+  batch_size: 8
+  features:
+    feature_start:  {event_types: Stimulus, mode: event_start,      max_events: 1, frequency: 8.0}
+    feature_end:    {event_types: Stimulus, mode: event_end,        max_events: 1, frequency: 8.0}
+    feature_class:
+      event_types: Stimulus
+      mode: event_class
+      max_events: 1
+      frequency: 8.0
+      mapping: {"<no_event>": 0, NonTarget: 1, Target: 2}
+    dense_target:
+      event_types: Stimulus
+      mode: dense_class
+      frequency: 8.0
+      mapping: {"<no_event>": 0, NonTarget: 1, Target: 2}
+
+decoder_config:
+  n_queries: 150

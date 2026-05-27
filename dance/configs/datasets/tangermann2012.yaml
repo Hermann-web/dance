@@ -1,0 +1,28 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# Tangermann et al. 2012 (BNCI2014_001) — 4-class motor imagery, 9 subjects.
+
+data:
+  study:
+    name: Tangermann2012Review
+    query: subject_timeline_index < 4   # smoke-test query; drop for full run
+  duration: 8.0
+  batch_size: 4
+  features:
+    feature_start:  {event_types: Stimulus, mode: event_start,      max_events: 1, frequency: 32.0}
+    feature_end:    {event_types: Stimulus, mode: event_end,        max_events: 1, frequency: 32.0}
+    feature_class:
+      event_types: Stimulus
+      mode: event_class
+      max_events: 1
+      frequency: 32.0
+      mapping: {"<no_event>": 0, tongue: 1, feet: 2, left_hand: 3, right_hand: 4}
+    dense_target:
+      event_types: Stimulus
+      mode: dense_class
+      frequency: 32.0
+      mapping: {"<no_event>": 0, tongue: 1, feet: 2, left_hand: 3, right_hand: 4}
+
+decoder_config:
+  n_queries: 5
