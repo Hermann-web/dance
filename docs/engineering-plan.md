@@ -242,14 +242,14 @@ Done when:
 
 ### Phase 1: LUDB ECG Baseline
 
-- [ ] Create `dance/ecg/` as the owned ECG implementation surface.
-- [ ] Implement LUDB loading with `WFDB`.
-- [ ] Convert LUDB wave delineation annotations into ECG-native interval events.
-- [ ] Define a collate path that feeds the existing `Dance` model through a
+- [x] Create `dance/ecg/` as the owned ECG implementation surface.
+- [x] Implement LUDB loading with `WFDB`.
+- [x] Convert LUDB wave delineation annotations into ECG-native interval events.
+- [x] Define a collate path that feeds the existing `Dance` model through a
       narrow adapter rather than through `neuralset`.
-- [ ] Implement wave-delineation metrics:
+- [x] Implement wave-delineation metrics:
       onset MAE, offset MAE, tolerance F1, and interval event F1.
-- [ ] Add tests for the LUDB reader, event conversion, batch contract, and
+- [x] Add tests for the LUDB reader, event conversion, batch contract, and
       metrics.
 
 Done when:
@@ -338,3 +338,8 @@ Known current gap:
   generation for core training.
 - Data-layer decision frozen: custom PyTorch ECG dataloader first, `neuralset`
   later if still useful.
+- Implemented `dance/ecg/` Phase 1 baseline surface with LUDB WFDB reader,
+  ECG-native wave schema, custom dataset/collate, compatibility adapter, and
+  ECG metric wrapper + event conversion helper.
+- Added `docs/artifacts/ecg-event-schema.md` and
+  `docs/artifacts/ludb-data-contract.md` to lock contracts.
