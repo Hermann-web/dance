@@ -8,12 +8,17 @@ from dance.ecg.adapters import ecg_batch_to_dance_batch
 from dance.ecg.data import LudbDataset, ludb_collate
 from dance.ecg.datasets.ludb import _events_from_wfdb_ann, read_ludb_record
 from dance.ecg.metrics import (
+    EcgBurdenError,
+    EcgOffsetDelay,
     EcgOffsetMAE,
+    EcgOnsetDelay,
     EcgOnsetMAE,
+    EcgRhythmEpisodeF1,
     EcgToleranceF1,
     EcgWaveDelineationF1,
     as_event_lists,
 )
+from dance.ecg.datasets.cpsc2021 import episodes_from_wfdb_ann
 from dance.ecg.training import build_ludb_loader, train_one_epoch
 from dance.tests.test_dance import _TinyDance
 
@@ -130,3 +135,29 @@ def test_cli_ecg_ludb_train_command(monkeypatch):
         ]
     )
     assert rc == 0
+
+
+def test_cpsc_episode_merge_and_metrics():
+    episodes = episodes_from_wfdb_ann(
+        samples=[100, 200, 210, 320],
+        symbols=["(AFIB", ")AFIB", "(AFIB", ")AFIB"],
+        fs=100.0,
+        merge_gap_seconds=0.2,
+    )
+    assert len(episodes) == 1
+    assert episodes[0].onset == 100 and episodes[0].offset == 320
+
+    pred = [[(0.1, 0.5, 1, 0.9)]]
+    tgt = [[(0.12, 0.52, 1)]]
+    f1 = EcgRhythmEpisodeF1(iou_threshold=0.5)
+    onset = EcgOnsetDelay()
+    offset = EcgOffsetDelay()
+    burden = EcgBurdenError()
+    f1.update(pred, tgt)
+    onset.update(pred, tgt)
+    offset.update(pred, tgt)
+    burden.update(pred, tgt)
+    assert torch.isclose(f1.compute(), torch.tensor(1.0))
+    assert torch.isclose(onset.compute(), torch.tensor(0.02))
+    assert torch.isclose(offset.compute(), torch.tensor(0.02))
+    assert torch.isclose(burden.compute(), torch.tensor(0.0))

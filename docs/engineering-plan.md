@@ -275,10 +275,10 @@ Done when:
 
 ### Phase 3: CPSC2021 Clinical Follow-On
 
-- [ ] Add `CPSC2021` ingestion via `WFDB` or dataset-native wrappers that still
+- [x] Add `CPSC2021` ingestion via `WFDB` or dataset-native wrappers that still
       terminate in the same ECG event schema.
-- [ ] Implement rhythm episode preprocessing and event merging rules.
-- [ ] Add episode metrics:
+- [x] Implement rhythm episode preprocessing and event merging rules.
+- [x] Add episode metrics:
       episode F1, onset delay, offset delay, and burden error.
 - [ ] Add sampling and class-imbalance handling appropriate for rare rhythm
       episodes.
@@ -349,3 +349,5 @@ Known current gap:
   internal `eeg`) while retaining ECG adapter as primary boundary.
 - Added standalone CLI command `dance ecg-ludb-train` for repository-native
   LUDB training runs via ECG modules.
+- Added initial CPSC2021 WFDB reader + AF episode conversion/merge and initial
+  rhythm metric surface (episode F1, onset delay, offset delay, burden error).
