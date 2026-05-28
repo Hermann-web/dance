@@ -90,3 +90,8 @@ skip = '.git,*.css,./scratch/*,*/.venv/*,./openneuro/*'
 check-hidden = true
 ignore-regex = 'https?://\S+'
 ignore-words-list = 'fro,toi,rouge,fo,lond,te'
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
