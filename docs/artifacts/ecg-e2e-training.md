@@ -8,7 +8,9 @@ This guide explains:
 2. how ingestion works in this repo,
 3. what processing happens before training,
 4. how to run end-to-end training,
-5. how to read results.
+5. how to run the simple classifier baseline,
+6. how to run subject-wise classifier CV and challenge scoring,
+7. how to read results.
 
 ---
 
@@ -18,7 +20,7 @@ This guide explains:
 - Install package and dependencies:
 
 ```bash
-pip install -e .
+uv sync
 ```
 
 The ECG pipeline relies on:
@@ -78,7 +80,7 @@ You can use PhysioNet tooling or WFDB APIs externally to download those records.
 ### LUDB
 
 ```bash
-dance ecg-ludb-train \
+uv run dance ecg-ludb-train \
   --root /path/to/ludb \
   --records 1 2 3 4 5 \
   --lead 0 \
@@ -88,13 +90,14 @@ dance ecg-ludb-train \
   --duration 4.0 \
   --stride 2.0 \
   --n-queries 64 \
+  --checkpoint-out results/ecg/ludb/model.ckpt \
   --device cpu
 ```
 
 ### CPSC2021
 
 ```bash
-dance ecg-cpsc2021-train \
+uv run dance ecg-cpsc2021-train \
   --root /path/to/cpsc2021 \
   --records data_31_1 data_31_2 data_31_3 \
   --lead 0 \
@@ -104,12 +107,86 @@ dance ecg-cpsc2021-train \
   --duration 30.0 \
   --stride 15.0 \
   --n-queries 64 \
+  --checkpoint-out results/ecg/cpsc2021/model.ckpt \
   --device cpu
 ```
 
 ---
 
-## 5) Result reading
+## 5) Simple CPSC2021 classifier baseline
+
+```bash
+uv run dance ecg-cpsc2021-logreg \
+  --root /path/to/cpsc2021 \
+  --train-records data_1_1 data_2_1 data_3_1 \
+  --test-records data_31_1 data_32_1 \
+  --lead 0 \
+  --duration 30.0 \
+  --stride 15.0
+```
+
+The classifier path is intentionally separate from DANCE interval detection. It
+matches the common Q1 `CPSC2021` binary AF evaluation regime more directly than
+the event detector does.
+
+---
+
+## 6) Subject-wise CV and challenge scoring
+
+Subject-aware classifier CV:
+
+```bash
+uv run dance ecg-cpsc2021-logreg-cv \
+  --root /path/to/cpsc2021 \
+  --records data_1_1 data_1_2 data_2_1 data_2_2 data_3_1 data_3_2 \
+  --lead 0 \
+  --duration 30.0 \
+  --stride 15.0 \
+  --n-splits 5
+```
+
+Official-style endpoint scoring from a JSON predictions map:
+
+```bash
+uv run dance ecg-cpsc2021-score \
+  --root /path/to/cpsc2021 \
+  --predictions-json /path/to/predictions.json
+```
+
+Prediction JSON format:
+
+```json
+{
+  "data_31_1": [[1200, 5600]],
+  "data_31_2": []
+}
+```
+
+---
+
+## 7) Result reading
+
+Held-out detector evaluation:
+
+```bash
+uv run dance ecg-ludb-eval \
+  --root /path/to/ludb \
+  --records 6 7 8 \
+  --lead 0 \
+  --duration 4.0 \
+  --stride 2.0 \
+  --checkpoint results/ecg/ludb/model.ckpt
+```
+
+```bash
+uv run dance ecg-cpsc2021-eval \
+  --root /path/to/cpsc2021 \
+  --records data_41_1 data_42_1 \
+  --lead 0 \
+  --duration 30.0 \
+  --stride 15.0 \
+  --checkpoint results/ecg/cpsc2021/model.ckpt
+```
 
 CLI training prints:
 
@@ -123,13 +200,19 @@ Interpretation:
 
 - loss is the mean batch loss for that epoch from `train_one_epoch`.
 - compare trend across epochs (decreasing is typically expected in stable runs).
-- for task-quality metrics (F1/MAE/burden), run evaluation scripts/notebooks using the metric classes in `dance.ecg.metrics`.
+- for detector-quality metrics, use the helpers in `dance.ecg.evaluation`.
 - for CPSC2021, weighted sampling is enabled in the standalone CLI to reduce
   under-sampling of AF-positive windows.
+- the detector eval CLIs print JSON metric reports for the held-out record set.
+- the logistic-regression CLI prints JSON with `accuracy`, `sensitivity`,
+  `specificity`, `precision`, `f1`, `auroc`, and dataset window counts.
+- the CV CLI prints per-fold metrics plus aggregate mean/std across folds.
+- the challenge scorer prints per-record scores and the mean official-style
+  score.
 
 ---
 
-## 6) Reproducible bash automation
+## 8) Reproducible bash automation
 
 Use the included scripts:
 

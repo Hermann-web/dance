@@ -88,10 +88,15 @@ Primary path:
 
 Secondary path, already in the pipeline after the first path is stable:
 
-- second task: `CPSC2021` rhythm episode detection;
-- second problem formulation: rhythm episode spans such as AF intervals;
-- reuse the same ECG-native event schema and training surface, then add
-  episode-specific metrics and sampling.
+- second task family: `CPSC2021`;
+- second problem formulation A: rhythm episode spans such as AF intervals,
+  scored with interval-native metrics and `SAFER`-style segmentation logic;
+- second problem formulation B: binary AF classification on fixed windows,
+  scored with the subject-wise sensitivity/specificity/F1 regime that is common
+  in Q1 `CPSC2021` papers;
+- keep these as two explicit paths, not one muddled metric surface:
+  the event detector owns interval localization and the classifier owns window
+  or record labels.
 
 Deferred path:
 
@@ -114,6 +119,9 @@ Allowed but non-canonical helper tooling:
   analysis utilities only. Its `ecg_process()` entrypoint is documented around a
   raw single-channel ECG pipeline and is not the training-label source of truth
   for multilead delineation datasets.
+- `scikit-learn` is allowed for the simple `CPSC2021` classification baseline.
+  It is intentionally non-canonical for the detector path and exists to support
+  a separate low-complexity AF benchmark.
 
 Not part of the planned core stack:
 
@@ -200,6 +208,10 @@ These remain phase-two integration targets, not phase-one gates.
 - implement a custom ECG dataloader path for LUDB;
 - define ECG-native event schemas for LUDB and CPSC2021;
 - add ECG-appropriate metrics for wave delineation and rhythm episodes;
+- add ECG-appropriate evaluation helpers for samplewise LUDB segmentation and
+  interval-native CPSC2021 rhythm scoring;
+- add a simple `CPSC2021` AF classifier baseline using `scikit-learn`
+  logistic regression on ECG and RR-derived window features;
 - preserve the reusable DANCE model core through a compatibility adapter;
 - add explicit dependency declarations required by the chosen path;
 - add durable artifacts that prevent future agents from reopening strategy.
@@ -282,11 +294,51 @@ Done when:
       episode F1, onset delay, offset delay, and burden error.
 - [x] Add sampling and class-imbalance handling appropriate for rare rhythm
       episodes.
+- [x] Add interval-evaluation helpers that expose `CPSC2021` rhythm metrics in a
+      repository-native way rather than only as loose metric classes.
 
 Done when:
 
 - the same ECG training surface can run both LUDB and CPSC2021 with task-fit
   metrics and no EEG-specific assumptions.
+
+### Phase 3A: Evaluation Surfaces
+
+- [x] Add LUDB evaluation helpers that report both event-level metrics
+      (`interval F1`, onset/offset error, tolerance F1) and samplewise
+      segmentation metrics (`accuracy`, `sensitivity`, `specificity`,
+      `precision`, `F1`) that mirror common Q1 LUDB reporting.
+- [x] Add `CPSC2021` interval-evaluation helpers that report event-level AF
+      episode metrics plus matched-IoU summaries aligned with the interval
+      segmentation literature.
+- [x] Keep these helpers model-agnostic so they can score DANCE outputs,
+      oracle labels, or exported event files without reopening dataset logic.
+
+Done when:
+
+- LUDB can be evaluated in both interval-event and samplewise segmentation
+  terms;
+- `CPSC2021` episode predictions can be scored with more than raw event F1;
+- the repo has a durable evaluation surface for the detector path.
+
+### Phase 3B: CPSC2021 AF Classification Baseline
+
+- [x] Add a separate `CPSC2021` window-classification data path built on the
+      same `WFDB` reader and windowing contracts.
+- [x] Derive a simple feature baseline from ECG morphology and RR variability.
+- [x] Implement a `scikit-learn` logistic-regression baseline with
+      class-balanced training.
+- [x] Report classification metrics expected by common Q1 `CPSC2021` work:
+      accuracy, sensitivity, specificity, precision, F1, and AUROC.
+- [x] Expose the classifier through a repository-native command path so it can
+      be run independently of the DANCE event detector.
+
+Done when:
+
+- the repo can reproduce a simple but honest `CPSC2021` binary AF baseline
+  without pretending it is the same task as interval detection;
+- train/test windows are built from dataset-native AF annotations;
+- the classifier path has its own tests and documented contract.
 
 ### Phase 4: Optional NeuralSet Integration
 
@@ -348,6 +400,20 @@ Required verification for Phase 3:
 - unit tests for rhythm metrics;
 - one smoke test on a CPSC2021-shaped batch.
 
+Required verification for Phase 3A:
+
+- unit tests for LUDB samplewise segmentation metrics;
+- unit tests for `CPSC2021` matched-IoU interval summaries;
+- one library-level evaluation test that scores detector-like event lists.
+
+Required verification for Phase 3B:
+
+- unit tests for `CPSC2021` classification window labeling;
+- unit tests for ECG/RR feature extraction;
+- one logistic-regression smoke test on a separable synthetic or mocked
+  `CPSC2021` window table;
+- one CLI-level contract test for the classifier entrypoint.
+
 Known current protection:
 
 - [dance/tests/test_data.py](/home/ubuntu/Github/thesis/dance/dance/tests/test_data.py:1)
@@ -357,9 +423,10 @@ Known current protection:
 
 Known current gap:
 
-- LUDB and CPSC2021 now have ECG-specific tests, but there is still no
-  repository-native evaluation command that runs the ECG metric suite on a real
-  validation split.
+- LUDB and CPSC2021 now have ECG-specific tests, repository-native evaluation
+  helpers, a subject-aware `CPSC2021` classifier baseline, and an official-like
+  endpoint scorer. The remaining gap is a full real-data benchmark recipe with
+  durable published split manifests and trained-model checkpoint orchestration.
 
 ## Progress Notes
 
@@ -403,5 +470,32 @@ Known current gap:
 - Verification after repair:
   `uv run --with pytest pytest dance/tests/test_ecg.py -q` passed with
   29 tests, and
+  `uv run --with pytest pytest dance/tests/test_dance.py dance/tests/test_data.py dance/tests/test_metrics.py -q`
+  passed with 13 tests.
+- Literature review then froze a two-track `CPSC2021` policy:
+  keep the existing interval detector path for `SAFER`-style AF episode
+  segmentation, and add a separate simple AF classifier baseline for the more
+  common Q1 window/record classification regime.
+- Implemented `dance.ecg.evaluation` so LUDB now has both event-level and
+  samplewise segmentation metrics, and `CPSC2021` interval scoring now includes
+  matched-IoU summaries in addition to episode F1 and boundary delays.
+- Implemented `dance.ecg.classifier` as a separate `CPSC2021` AF baseline:
+  window extraction from the canonical WFDB reader, ECG/RR feature extraction,
+  class-balanced logistic regression, and binary classification metrics.
+- Added repository-native CLI entrypoint `dance ecg-cpsc2021-logreg` so the
+  classifier path can run independently of the DANCE detector path.
+- Added subject-aware `CPSC2021` CV tooling in `dance.ecg.benchmark`, using
+  record-stem subject grouping plus stratified group folds for the classifier
+  regime.
+- Added `dance.ecg.cpsc2021_score` and CLI command `dance ecg-cpsc2021-score`
+  so official-style AF rhythm/endpoints scoring is available inside the repo.
+- Added checkpoint save/load plus held-out detector evaluation for LUDB and
+  `CPSC2021`, exposed through `dance ecg-ludb-eval` and
+  `dance ecg-cpsc2021-eval`.
+- Updated the durable artifacts to freeze the real `CPSC2021` data contract,
+  evaluation surface, and classifier benchmark path.
+- Verification after the classifier/evaluation work:
+  `uv run --with pytest pytest dance/tests/test_ecg.py -q` passed with
+  44 tests, and
   `uv run --with pytest pytest dance/tests/test_dance.py dance/tests/test_data.py dance/tests/test_metrics.py -q`
   passed with 13 tests.

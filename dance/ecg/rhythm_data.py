@@ -7,8 +7,8 @@ import torch
 from torch.utils.data import Dataset, WeightedRandomSampler
 
 from ._batching import collate_interval_batch
-from .datasets.cpsc2021 import read_cpsc2021_record
 from .data import _clip_events, _resolve_window_samples
+from .datasets.cpsc2021 import read_cpsc2021_record
 from .events import RHYTHM_CLASS_TO_ID
 
 

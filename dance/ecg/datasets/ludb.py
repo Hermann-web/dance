@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..events.schema import EcgWaveEvent, WAVE_ANN_TO_CLASS
+from ..events.schema import WAVE_ANN_TO_CLASS, EcgWaveEvent
 
 
 def _resolve_ludb_lead(record_path: str | Path, lead: str | int) -> tuple[int, str]:

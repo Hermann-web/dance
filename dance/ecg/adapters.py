@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+
 class _EcgBatchContract(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
     eeg: torch.Tensor

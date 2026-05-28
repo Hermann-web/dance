@@ -14,6 +14,7 @@ def collate_interval_batch(batch: list[dict]) -> dict[str, torch.Tensor | list[s
     end = torch.zeros((len(batch), max_events), dtype=torch.float32)
     cls = torch.zeros((len(batch), max_events), dtype=torch.long)
     fs = torch.tensor([item["fs"] for item in batch], dtype=torch.float32)
+    signal_length = torch.tensor([item["eeg"].shape[-1] for item in batch], dtype=torch.long)
     ids: list[str] = []
     for i, item in enumerate(batch):
         sig = item["eeg"]
@@ -32,6 +33,7 @@ def collate_interval_batch(batch: list[dict]) -> dict[str, torch.Tensor | list[s
         "record_id": ids,
         "eeg": eeg,
         "fs": fs,
+        "signal_length": signal_length,
         "start": start.clamp(0.0, 1.0),
         "end": end.clamp(0.0, 1.0),
         "class": cls,

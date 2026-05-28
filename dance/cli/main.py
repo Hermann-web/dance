@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from pydantic import BaseModel, ConfigDict, PositiveFloat, PositiveInt
@@ -39,6 +40,7 @@ class _EcgCliTrainConfig(BaseModel):
 
 def _run_ecg_train(
     *,
+    task: str,
     root: str,
     records: list[str],
     lead: str | int,
@@ -52,11 +54,12 @@ def _run_ecg_train(
     n_classes: int,
     build_loader,
     use_weighted_sampler: bool = False,
+    checkpoint_out: str | None = None,
 ) -> int:
     import torch
 
     from ..dance import Dance
-    from ..ecg.training import train_one_epoch
+    from ..ecg.training import save_checkpoint, train_one_epoch
 
     _EcgCliTrainConfig(
         batch_size=batch_size,
@@ -92,6 +95,56 @@ def _run_ecg_train(
     for epoch in range(epochs):
         loss = train_one_epoch(model, loader, optim, device=device)
         print(f"epoch={epoch + 1} loss={loss:.6f}")
+    if checkpoint_out is not None:
+        checkpoint_path = save_checkpoint(model, checkpoint_out, task=task)
+        print(f"checkpoint={checkpoint_path}")
+    return 0
+
+
+def _run_ecg_eval(
+    *,
+    task: str,
+    root: str,
+    records: list[str],
+    lead: str | int,
+    batch_size: int,
+    duration: float,
+    stride: float | None,
+    checkpoint: str,
+    device: str,
+    build_loader,
+    use_weighted_sampler: bool = False,
+) -> int:
+    from ..ecg.training import evaluate_model, load_checkpoint
+
+    if not records:
+        raise ValueError("records must contain at least one record id.")
+    model, metadata = load_checkpoint(checkpoint, map_location=device)
+    checkpoint_task = metadata.get("task")
+    if checkpoint_task is not None and checkpoint_task != task:
+        raise ValueError(
+            f"Checkpoint task {checkpoint_task!r} does not match requested task {task!r}."
+        )
+    loader_kwargs = dict(
+        root=root,
+        record_ids=records,
+        lead=lead,
+        duration=duration,
+        stride=stride,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+    if use_weighted_sampler:
+        loader_kwargs["use_weighted_sampler"] = True
+    loader = build_loader(**loader_kwargs)
+    metrics = evaluate_model(
+        model,
+        loader,
+        duration=duration,
+        task=task,
+        device=device,
+    )
+    print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0
 
 
@@ -120,6 +173,7 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg.add_argument("--stride", type=float, default=2.0)
     ecg.add_argument("--n-queries", type=int, default=64)
     ecg.add_argument("--device", type=str, default="cpu")
+    ecg.add_argument("--checkpoint-out", type=str, default=None)
     ecg_rhythm = sub.add_parser(
         "ecg-cpsc2021-train",
         help="Run minimal standalone ECG CPSC2021 rhythm training.",
@@ -134,6 +188,83 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg_rhythm.add_argument("--stride", type=float, default=15.0)
     ecg_rhythm.add_argument("--n-queries", type=int, default=64)
     ecg_rhythm.add_argument("--device", type=str, default="cpu")
+    ecg_rhythm.add_argument("--checkpoint-out", type=str, default=None)
+    ecg_eval = sub.add_parser(
+        "ecg-ludb-eval",
+        help="Evaluate a checkpointed ECG LUDB model on held-out records.",
+    )
+    ecg_eval.add_argument("--root", required=True, help="LUDB root folder with WFDB record files.")
+    ecg_eval.add_argument("--records", nargs="+", required=True, help="Record stems to evaluate.")
+    ecg_eval.add_argument("--batch-size", type=int, default=8)
+    ecg_eval.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
+    ecg_eval.add_argument("--duration", type=float, default=4.0)
+    ecg_eval.add_argument("--stride", type=float, default=2.0)
+    ecg_eval.add_argument("--checkpoint", required=True, help="Checkpoint path from ecg-ludb-train.")
+    ecg_eval.add_argument("--device", type=str, default="cpu")
+    ecg_rhythm_eval = sub.add_parser(
+        "ecg-cpsc2021-eval",
+        help="Evaluate a checkpointed ECG CPSC2021 rhythm model on held-out records.",
+    )
+    ecg_rhythm_eval.add_argument("--root", required=True, help="CPSC2021 root folder.")
+    ecg_rhythm_eval.add_argument("--records", nargs="+", required=True, help="Record stems to evaluate.")
+    ecg_rhythm_eval.add_argument("--batch-size", type=int, default=8)
+    ecg_rhythm_eval.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
+    ecg_rhythm_eval.add_argument("--duration", type=float, default=30.0)
+    ecg_rhythm_eval.add_argument("--stride", type=float, default=15.0)
+    ecg_rhythm_eval.add_argument("--checkpoint", required=True, help="Checkpoint path from ecg-cpsc2021-train.")
+    ecg_rhythm_eval.add_argument("--device", type=str, default="cpu")
+    ecg_cls = sub.add_parser(
+        "ecg-cpsc2021-logreg",
+        help="Run a simple CPSC2021 AF logistic-regression baseline.",
+    )
+    ecg_cls.add_argument("--root", required=True, help="CPSC2021 root folder.")
+    ecg_cls.add_argument(
+        "--train-records",
+        nargs="+",
+        required=True,
+        help="Training record stems.",
+    )
+    ecg_cls.add_argument(
+        "--test-records",
+        nargs="+",
+        required=True,
+        help="Test record stems.",
+    )
+    ecg_cls.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
+    ecg_cls.add_argument("--duration", type=float, default=30.0)
+    ecg_cls.add_argument("--stride", type=float, default=15.0)
+    ecg_cls.add_argument("--c", type=float, default=1.0, help="Logistic regression inverse regularization.")
+    ecg_cls.add_argument("--max-iter", type=int, default=1000)
+    ecg_cls.add_argument("--threshold", type=float, default=0.5)
+    ecg_cls_cv = sub.add_parser(
+        "ecg-cpsc2021-logreg-cv",
+        help="Run subject-aware CPSC2021 AF logistic-regression cross-validation.",
+    )
+    ecg_cls_cv.add_argument("--root", required=True, help="CPSC2021 root folder.")
+    ecg_cls_cv.add_argument("--records", nargs="+", required=True, help="Record stems to split.")
+    ecg_cls_cv.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
+    ecg_cls_cv.add_argument("--duration", type=float, default=30.0)
+    ecg_cls_cv.add_argument("--stride", type=float, default=15.0)
+    ecg_cls_cv.add_argument("--c", type=float, default=1.0)
+    ecg_cls_cv.add_argument("--max-iter", type=int, default=1000)
+    ecg_cls_cv.add_argument("--threshold", type=float, default=0.5)
+    ecg_cls_cv.add_argument("--n-splits", type=int, default=5)
+    ecg_cls_cv.add_argument("--random-state", type=int, default=0)
+    ecg_cls_cv.add_argument(
+        "--no-stratified",
+        action="store_true",
+        help="Use GroupKFold instead of StratifiedGroupKFold.",
+    )
+    ecg_score = sub.add_parser(
+        "ecg-cpsc2021-score",
+        help="Score CPSC2021 endpoint predictions with the official-style challenge metric.",
+    )
+    ecg_score.add_argument("--root", required=True, help="CPSC2021 root folder.")
+    ecg_score.add_argument(
+        "--predictions-json",
+        required=True,
+        help="JSON mapping record id to [[start, end], ...] sample endpoints.",
+    )
 
     run = sub.add_parser("run", help="Train + test DANCE on one dataset.")
     run.add_argument("dataset", help="Dataset slug (see `dance list-datasets`).")
@@ -241,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
         from ..ecg.training import build_ludb_loader
 
         return _run_ecg_train(
+            task="ludb",
             root=args.root,
             records=args.records,
             lead=_parse_lead(args.lead),
@@ -253,12 +385,14 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             n_classes=len(WAVE_CLASS_TO_ID),
             build_loader=build_ludb_loader,
+            checkpoint_out=args.checkpoint_out,
         )
     if args.cmd == "ecg-cpsc2021-train":
         from ..ecg.events import RHYTHM_CLASS_TO_ID
         from ..ecg.training import build_cpsc2021_loader
 
         return _run_ecg_train(
+            task="cpsc2021",
             root=args.root,
             records=args.records,
             lead=_parse_lead(args.lead),
@@ -272,7 +406,79 @@ def main(argv: list[str] | None = None) -> int:
             n_classes=len(RHYTHM_CLASS_TO_ID),
             build_loader=build_cpsc2021_loader,
             use_weighted_sampler=True,
+            checkpoint_out=args.checkpoint_out,
         )
+    if args.cmd == "ecg-ludb-eval":
+        from ..ecg.training import build_ludb_loader
+
+        return _run_ecg_eval(
+            task="ludb",
+            root=args.root,
+            records=args.records,
+            lead=_parse_lead(args.lead),
+            batch_size=args.batch_size,
+            duration=args.duration,
+            stride=args.stride,
+            checkpoint=args.checkpoint,
+            device=args.device,
+            build_loader=build_ludb_loader,
+        )
+    if args.cmd == "ecg-cpsc2021-eval":
+        from ..ecg.training import build_cpsc2021_loader
+
+        return _run_ecg_eval(
+            task="cpsc2021",
+            root=args.root,
+            records=args.records,
+            lead=_parse_lead(args.lead),
+            batch_size=args.batch_size,
+            duration=args.duration,
+            stride=args.stride,
+            checkpoint=args.checkpoint,
+            device=args.device,
+            build_loader=build_cpsc2021_loader,
+        )
+    if args.cmd == "ecg-cpsc2021-logreg":
+        from ..ecg.classifier import run_cpsc2021_logreg_baseline
+
+        result = run_cpsc2021_logreg_baseline(
+            root=args.root,
+            train_record_ids=args.train_records,
+            test_record_ids=args.test_records,
+            lead=_parse_lead(args.lead),
+            window_duration_s=args.duration,
+            window_stride_s=args.stride,
+            c=args.c,
+            max_iter=args.max_iter,
+            threshold=args.threshold,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.cmd == "ecg-cpsc2021-logreg-cv":
+        from ..ecg.benchmark import run_cpsc2021_logreg_cv
+
+        result = run_cpsc2021_logreg_cv(
+            root=args.root,
+            record_ids=args.records,
+            lead=_parse_lead(args.lead),
+            window_duration_s=args.duration,
+            window_stride_s=args.stride,
+            n_splits=args.n_splits,
+            stratified=not args.no_stratified,
+            random_state=args.random_state,
+            c=args.c,
+            max_iter=args.max_iter,
+            threshold=args.threshold,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.cmd == "ecg-cpsc2021-score":
+        from ..ecg.cpsc2021_score import load_prediction_json, score_predictions_map
+
+        predictions = load_prediction_json(args.predictions_json)
+        result = score_predictions_map(args.root, predictions)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
 
     if args.cmd == "run":
         if args.submit or args.local:
