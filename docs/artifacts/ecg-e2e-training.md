@@ -58,13 +58,17 @@ You can use PhysioNet tooling or WFDB APIs externally to download those records.
 
 ### Common processing
 
-- Raw sample boundaries are normalized to `[0, 1]` by window length in collate.
+- ECG records are segmented into explicit training windows before collation.
+- Raw sample boundaries are normalized to `[0, 1]` by the active window length
+  in collate.
 - Batch adapter `ecg_batch_to_dance_batch` validates:
   - required keys
   - shape consistency
   - normalized boundaries
   - class dtype
   - optional channel-position shape
+- The standalone ECG CLI trains with `use_channel_merger=False` and does not
+  synthesize fake channel geometry.
 - `Dance.forward` accepts canonical `eeg`; also supports `signal` alias.
 
 ---
@@ -81,7 +85,8 @@ dance ecg-ludb-train \
   --epochs 5 \
   --batch-size 8 \
   --lr 1e-3 \
-  --duration 1.0 \
+  --duration 4.0 \
+  --stride 2.0 \
   --n-queries 64 \
   --device cpu
 ```
@@ -91,12 +96,13 @@ dance ecg-ludb-train \
 ```bash
 dance ecg-cpsc2021-train \
   --root /path/to/cpsc2021 \
-  --records A001 A002 A003 \
+  --records data_31_1 data_31_2 data_31_3 \
   --lead 0 \
   --epochs 5 \
   --batch-size 8 \
   --lr 1e-3 \
-  --duration 1.0 \
+  --duration 30.0 \
+  --stride 15.0 \
   --n-queries 64 \
   --device cpu
 ```
@@ -118,6 +124,8 @@ Interpretation:
 - loss is the mean batch loss for that epoch from `train_one_epoch`.
 - compare trend across epochs (decreasing is typically expected in stable runs).
 - for task-quality metrics (F1/MAE/burden), run evaluation scripts/notebooks using the metric classes in `dance.ecg.metrics`.
+- for CPSC2021, weighted sampling is enabled in the standalone CLI to reduce
+  under-sampling of AF-positive windows.
 
 ---
 

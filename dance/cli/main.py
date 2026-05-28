@@ -34,6 +34,7 @@ class _EcgCliTrainConfig(BaseModel):
     n_classes: PositiveInt
     lr: PositiveFloat
     duration: PositiveFloat
+    stride: PositiveFloat | None = None
 
 
 def _run_ecg_train(
@@ -45,10 +46,12 @@ def _run_ecg_train(
     lr: float,
     epochs: int,
     duration: float,
+    stride: float | None,
     n_queries: int,
     device: str,
     n_classes: int,
     build_loader,
+    use_weighted_sampler: bool = False,
 ) -> int:
     import torch
 
@@ -62,21 +65,28 @@ def _run_ecg_train(
         n_classes=n_classes,
         lr=lr,
         duration=duration,
+        stride=stride,
     )
     if not records:
         raise ValueError("records must contain at least one record id.")
-    loader = build_loader(
+    loader_kwargs = dict(
         root=root,
         record_ids=records,
         lead=lead,
+        duration=duration,
+        stride=stride,
         batch_size=batch_size,
         shuffle=True,
     )
+    if use_weighted_sampler:
+        loader_kwargs["use_weighted_sampler"] = True
+    loader = build_loader(**loader_kwargs)
     model = Dance(
         n_channels=1,
         n_classes=n_classes,
         n_queries=n_queries,
         duration=duration,
+        use_channel_merger=False,
     )
     optim = torch.optim.AdamW(model.parameters(), lr=lr)
     for epoch in range(epochs):
@@ -106,7 +116,8 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
     ecg.add_argument("--lr", type=float, default=1e-3)
     ecg.add_argument("--epochs", type=int, default=1)
-    ecg.add_argument("--duration", type=float, default=1.0)
+    ecg.add_argument("--duration", type=float, default=4.0)
+    ecg.add_argument("--stride", type=float, default=2.0)
     ecg.add_argument("--n-queries", type=int, default=64)
     ecg.add_argument("--device", type=str, default="cpu")
     ecg_rhythm = sub.add_parser(
@@ -119,7 +130,8 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg_rhythm.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
     ecg_rhythm.add_argument("--lr", type=float, default=1e-3)
     ecg_rhythm.add_argument("--epochs", type=int, default=1)
-    ecg_rhythm.add_argument("--duration", type=float, default=1.0)
+    ecg_rhythm.add_argument("--duration", type=float, default=30.0)
+    ecg_rhythm.add_argument("--stride", type=float, default=15.0)
     ecg_rhythm.add_argument("--n-queries", type=int, default=64)
     ecg_rhythm.add_argument("--device", type=str, default="cpu")
 
@@ -234,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             lead=_parse_lead(args.lead),
             batch_size=args.batch_size,
             duration=args.duration,
+            stride=args.stride,
             n_queries=args.n_queries,
             lr=args.lr,
             epochs=args.epochs,
@@ -251,12 +264,14 @@ def main(argv: list[str] | None = None) -> int:
             lead=_parse_lead(args.lead),
             batch_size=args.batch_size,
             duration=args.duration,
+            stride=args.stride,
             n_queries=args.n_queries,
             lr=args.lr,
             epochs=args.epochs,
             device=args.device,
             n_classes=len(RHYTHM_CLASS_TO_ID),
             build_loader=build_cpsc2021_loader,
+            use_weighted_sampler=True,
         )
 
     if args.cmd == "run":

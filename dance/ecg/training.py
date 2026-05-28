@@ -16,13 +16,28 @@ def build_ludb_loader(
     record_ids: list[str],
     *,
     lead: str | int = 0,
+    duration: float | None = None,
+    stride: float | None = None,
     batch_size: int = 8,
     shuffle: bool = True,
+    sampler=None,
 ) -> DataLoader:
     if not record_ids:
         raise ValueError("build_ludb_loader requires at least one record id.")
-    ds = LudbDataset(root=root, record_ids=record_ids, lead=lead)
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, collate_fn=ludb_collate)
+    ds = LudbDataset(
+        root=root,
+        record_ids=record_ids,
+        lead=lead,
+        window_duration_s=duration,
+        window_stride_s=stride,
+    )
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=shuffle and sampler is None,
+        sampler=sampler,
+        collate_fn=ludb_collate,
+    )
 
 
 def build_cpsc2021_loader(
@@ -30,16 +45,37 @@ def build_cpsc2021_loader(
     record_ids: list[str],
     *,
     lead: str | int = 0,
+    duration: float | None = None,
+    stride: float | None = None,
     batch_size: int = 8,
     shuffle: bool = True,
+    use_weighted_sampler: bool = False,
+    positive_weight: float = 5.0,
+    negative_weight: float = 1.0,
 ) -> DataLoader:
     if not record_ids:
         raise ValueError("build_cpsc2021_loader requires at least one record id.")
-    ds = Cpsc2021Dataset(root=root, record_ids=record_ids, lead=lead)
+    ds = Cpsc2021Dataset(
+        root=root,
+        record_ids=record_ids,
+        lead=lead,
+        window_duration_s=duration,
+        window_stride_s=stride,
+    )
+    sampler = None
+    if use_weighted_sampler:
+        from .rhythm_data import build_rhythm_weighted_sampler
+
+        sampler = build_rhythm_weighted_sampler(
+            ds,
+            positive_weight=positive_weight,
+            negative_weight=negative_weight,
+        )
     return DataLoader(
         ds,
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle and sampler is None,
+        sampler=sampler,
         collate_fn=cpsc2021_collate,
     )
 

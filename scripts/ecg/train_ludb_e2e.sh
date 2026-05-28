@@ -35,7 +35,8 @@ dance ecg-ludb-train \
   --epochs 5 \
   --batch-size 8 \
   --lr 1e-3 \
-  --duration 1.0 \
+  --duration 4.0 \
+  --stride 2.0 \
   --n-queries 64 \
   --device cpu | tee "${LOG}"
 

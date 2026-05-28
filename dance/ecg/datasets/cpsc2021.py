@@ -13,7 +13,8 @@ def read_cpsc2021_record(record_path: str | Path, lead: str | int = 0) -> dict:
 
     record = wfdb.rdrecord(str(record_path), channels=[lead] if isinstance(lead, int) else None)
     if isinstance(lead, str):
-        lead_idx = record.sig_name.index(lead)
+        lowered = [name.lower() for name in record.sig_name]
+        lead_idx = lowered.index(lead.strip().lower())
     else:
         lead_idx = 0
     fs = float(record.fs)
@@ -23,7 +24,14 @@ def read_cpsc2021_record(record_path: str | Path, lead: str | int = 0) -> dict:
         )
     ann = wfdb.rdann(str(record_path), extension="atr")
     signal = record.p_signal[:, lead_idx].astype(np.float32)
-    episodes = episodes_from_wfdb_ann(ann.sample, list(ann.symbol), fs=fs)
+    global_rhythm = " ".join(record.comments).strip().lower()
+    episodes = episodes_from_wfdb_ann(
+        ann.sample,
+        list(ann.aux_note),
+        fs=fs,
+        signal_length=len(signal),
+        global_rhythm=global_rhythm,
+    )
     return {
         "record_id": Path(record_path).name,
         "signal": signal,
@@ -34,19 +42,29 @@ def read_cpsc2021_record(record_path: str | Path, lead: str | int = 0) -> dict:
 
 def episodes_from_wfdb_ann(
     samples: list[int] | np.ndarray,
-    symbols: list[str],
+    aux_notes: list[str],
     *,
     fs: float,
+    signal_length: int,
+    global_rhythm: str = "",
     merge_gap_seconds: float = 0.0,
 ) -> list[EcgRhythmEpisode]:
+    if signal_length <= 0:
+        raise ValueError("signal_length must be positive for CPSC2021 episode parsing.")
+
+    if "persistent atrial fibrillation" in global_rhythm:
+        return [EcgRhythmEpisode(label="af_episode", onset=0, offset=signal_length - 1)]
+    if "non atrial fibrillation" in global_rhythm:
+        return []
+
     out: list[EcgRhythmEpisode] = []
     open_start: int | None = None
-    for s, sym in zip(samples, symbols):
+    for s, note in zip(samples, aux_notes):
         sample = int(s)
-        if sym == "(AFIB":
+        if note in {"(AFIB", "(AFL"}:
             open_start = sample
             continue
-        if sym == ")AFIB" and open_start is not None:
+        if note == "(N" and open_start is not None:
             if sample > open_start:
                 out.append(
                     EcgRhythmEpisode(
@@ -56,6 +74,14 @@ def episodes_from_wfdb_ann(
                     )
                 )
             open_start = None
+    if open_start is not None:
+        out.append(
+            EcgRhythmEpisode(
+                label="af_episode",
+                onset=open_start,
+                offset=signal_length - 1,
+            )
+        )
     if not out:
         return out
     if merge_gap_seconds <= 0:

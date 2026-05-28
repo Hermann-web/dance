@@ -3,9 +3,6 @@ from __future__ import annotations
 import torch
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from .validation import check_shapes
-
-
 class _EcgBatchContract(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
     eeg: torch.Tensor
@@ -45,16 +42,11 @@ class _EcgBatchContract(BaseModel):
         return self
 
 
-@check_shapes(
-    "batch['eeg']: [batch, channels, time]",
-    "batch['start']: [batch, events]",
-    "batch['end']: [batch, events]",
-    "batch['class']: [batch, events]",
-)
 def ecg_batch_to_dance_batch(
     batch: dict[str, torch.Tensor],
     *,
     validate: bool = True,
+    synthesize_channel_positions: bool = False,
 ) -> dict[str, torch.Tensor]:
     """Compatibility adapter into Dance.forward contract."""
     required = {"eeg", "start", "end", "class"}
@@ -74,7 +66,7 @@ def ecg_batch_to_dance_batch(
     }
     if "channel_positions" in batch:
         out["channel_positions"] = batch["channel_positions"]
-    else:
+    elif synthesize_channel_positions:
         bsz, channels, _ = batch["eeg"].shape
         x = torch.linspace(-1.0, 1.0, channels, device=batch["eeg"].device)
         out["channel_positions"] = torch.stack(

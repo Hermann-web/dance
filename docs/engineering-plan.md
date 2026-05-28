@@ -299,6 +299,38 @@ Done when:
 - `neuralset` support reduces maintenance cost rather than blocking progress or
   reintroducing EEG-centric abstractions.
 
+
+### Stabilization Gate: Review-Driven Recovery
+
+The first ECG surface landed with the right broad shape, but review found
+several hard blockers and false-complete tasks that must be repaired before the
+plan can honestly claim ECG training readiness.
+
+- [x] Remove the import-time decorator failure in `dance.ecg.adapters`.
+- [x] Correct LUDB parsing to use the real lead-specific WFDB annotation
+      extensions and `(`, wave-symbol, `)` triplets.
+- [x] Correct CPSC2021 parsing to use WFDB rhythm flags from `aux_note` and
+      header comments for global rhythm, rather than beat `symbol` values.
+- [x] Disable synthetic ECG channel geometry in the standalone training path and
+      run the first baseline with `use_channel_merger=False`.
+- [x] Make ECG loader `duration` mean real training window duration by adding
+      explicit windowing/segmentation to LUDB and CPSC2021.
+- [x] Convert rhythm onset/offset delay metrics to matched metrics rather than
+      positional list comparisons.
+- [x] Wire CPSC2021 class-imbalance sampling into the executable training path,
+      not only helper code.
+- [x] Rewrite ECG tests so they validate the real WFDB contracts instead of
+      fake composite symbols.
+- [x] Re-verify the ECG surface with `uv run` test commands before claiming
+      readiness again.
+
+Done when:
+
+- `dance.ecg` imports in a normal environment;
+- LUDB and CPSC2021 readers reflect the actual dataset annotation contracts;
+- the standalone ECG CLI uses merger-off, windowed batches, and wired sampling;
+- ECG tests pass under `uv run`.
+
 ## Verification Model
 
 Every phase must be backed by repo-local verification, not only prose.
@@ -325,8 +357,9 @@ Known current protection:
 
 Known current gap:
 
-- there are no ECG-specific tests, no ECG dataset readers, no ECG metrics, and
-  no test that verifies ECG-native labels through the model path.
+- LUDB and CPSC2021 now have ECG-specific tests, but there is still no
+  repository-native evaluation command that runs the ECG metric suite on a real
+  validation split.
 
 ## Progress Notes
 
@@ -355,3 +388,20 @@ Known current gap:
   AF-episode class imbalance handling.
 - Added `build_cpsc2021_loader` and CLI command `dance ecg-cpsc2021-train` so
   the same standalone ECG training surface now runs both LUDB and CPSC2021.
+- Review then found six material blockers before training readiness:
+  invalid `check-shapes` usage, wrong LUDB parsing contract, wrong CPSC2021
+  parsing contract, synthetic ChannelMerger geometry in the ECG CLI, missing
+  real windowing, and unwired rhythm sampling.
+- Stabilization work was re-opened explicitly rather than pretending the first
+  ECG surface was already train-ready.
+- Stabilization then repaired those blockers:
+  the invalid adapter decorator was removed, LUDB now uses lead-specific WFDB
+  annotation extensions, CPSC2021 now reads rhythm transitions from `aux_note`
+  plus header comments, standalone ECG CLI runs with `use_channel_merger=False`,
+  LUDB/CPSC2021 loaders now create real windows from `duration`/`stride`, and
+  weighted rhythm sampling is wired into the executable CPSC path.
+- Verification after repair:
+  `uv run --with pytest pytest dance/tests/test_ecg.py -q` passed with
+  29 tests, and
+  `uv run --with pytest pytest dance/tests/test_dance.py dance/tests/test_data.py dance/tests/test_metrics.py -q`
+  passed with 13 tests.
