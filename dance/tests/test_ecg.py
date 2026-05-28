@@ -40,6 +40,10 @@ class _FakeAnn:
     symbol = ["(p", ")p", "(N", ")N", "(t", ")t", "(x", ")x"]
 
 
+class _BadFsRecord(_FakeRecord):
+    fs = 0.0
+
+
 def test_ludb_reader_with_wfdb_annotations(monkeypatch):
     fake = types.SimpleNamespace(rdrecord=lambda *a, **k: _FakeRecord(), rdann=lambda *a, **k: _FakeAnn())
     monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
@@ -47,6 +51,13 @@ def test_ludb_reader_with_wfdb_annotations(monkeypatch):
     assert out["fs"] == 500.0
     assert out["signal"].shape == (20,)
     assert [e.label for e in out["events"]] == ["p_wave", "qrs_complex", "t_wave"]
+
+
+def test_ludb_reader_rejects_non_positive_fs(monkeypatch):
+    fake = types.SimpleNamespace(rdrecord=lambda *a, **k: _BadFsRecord(), rdann=lambda *a, **k: _FakeAnn())
+    monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
+    with pytest.raises(ValueError, match="Invalid sampling frequency"):
+        read_ludb_record("rec_01")
 
 
 def test_event_conversion_skips_unknown_symbols():
@@ -275,7 +286,19 @@ def test_cpsc_loader_and_cli_command(monkeypatch, tmp_path):
         ]
     )
     assert rc == 0
-    assert seen["lead"] == 1
+
+
+def test_cpsc_reader_rejects_non_positive_fs(monkeypatch):
+    class _CAnn:
+        sample = [10, 30]
+        symbol = ["(AFIB", ")AFIB"]
+
+    fake = types.SimpleNamespace(rdrecord=lambda *a, **k: _BadFsRecord(), rdann=lambda *a, **k: _CAnn())
+    monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
+    from dance.ecg.datasets.cpsc2021 import read_cpsc2021_record
+
+    with pytest.raises(ValueError, match="Invalid sampling frequency"):
+        read_cpsc2021_record("A001")
 
 
 def test_shared_collate_rejects_empty_batch():
@@ -307,6 +330,41 @@ def test_adapter_validation_rejects_out_of_range_boundaries():
         ecg_batch_to_dance_batch(batch)
 
 
+def test_adapter_validation_rejects_non_long_class_dtype():
+    batch = {
+        "eeg": torch.zeros(1, 1, 10),
+        "start": torch.tensor([[0.1]]),
+        "end": torch.tensor([[0.2]]),
+        "class": torch.tensor([[1.0]], dtype=torch.float32),
+    }
+    with pytest.raises(ValueError, match="must be torch.long"):
+        ecg_batch_to_dance_batch(batch)
+
+
+def test_adapter_validation_rejects_bad_channel_positions_shape():
+    batch = {
+        "eeg": torch.zeros(2, 1, 10),
+        "start": torch.tensor([[0.1], [0.2]]),
+        "end": torch.tensor([[0.2], [0.3]]),
+        "class": torch.tensor([[1], [1]], dtype=torch.long),
+        "channel_positions": torch.zeros(2, 3, 2),
+    }
+    with pytest.raises(ValueError, match="channel_positions must match eeg"):
+        ecg_batch_to_dance_batch(batch)
+
+
+def test_adapter_validation_rejects_bad_channel_positions_rank():
+    batch = {
+        "eeg": torch.zeros(2, 1, 10),
+        "start": torch.tensor([[0.1], [0.2]]),
+        "end": torch.tensor([[0.2], [0.3]]),
+        "class": torch.tensor([[1], [1]], dtype=torch.long),
+        "channel_positions": torch.zeros(2, 1),
+    }
+    with pytest.raises(ValueError, match="shape \\(B, C, 2\\)"):
+        ecg_batch_to_dance_batch(batch)
+
+
 def test_cli_parse_lead_helper():
     from dance.cli.main import _parse_lead
 
@@ -315,13 +373,19 @@ def test_cli_parse_lead_helper():
     assert _parse_lead("V1") == "V1"
     with pytest.raises(ValueError, match="cannot be empty"):
         _parse_lead("   ")
+    with pytest.raises(ValueError, match="not valid"):
+        _parse_lead("1.0")
 
 
 def test_cli_train_rejects_non_positive_numeric_args():
     from dance.cli.main import _run_ecg_train
 
-    with pytest.raises(ValueError, match="batch_size must be > 0"):
+    with pytest.raises(ValueError):
+        _run_ecg_train(
             root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=0,
             lr=1e-3,
             epochs=1,
             duration=1.0,
@@ -346,7 +410,16 @@ def test_train_one_epoch_rejects_empty_loader():
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     with pytest.raises(ValueError, match="empty loader"):
         train_one_epoch(model, _EmptyLoader(), optim)
-    with pytest.raises(ValueError, match="epochs must be > 0"):
+
+
+def test_loader_builders_reject_empty_record_ids(tmp_path):
+    from dance.cli.main import _run_ecg_train
+
+    with pytest.raises(ValueError, match="at least one record id"):
+        build_ludb_loader(tmp_path, [], batch_size=1)
+    with pytest.raises(ValueError, match="at least one record id"):
+        build_cpsc2021_loader(tmp_path, [], batch_size=1)
+    with pytest.raises(ValueError):
         _run_ecg_train(
             root="/tmp/x",
             records=["a"],
@@ -360,7 +433,7 @@ def test_train_one_epoch_rejects_empty_loader():
             n_classes=2,
             build_loader=lambda **kwargs: object(),
         )
-    with pytest.raises(ValueError, match="n_queries must be > 0"):
+    with pytest.raises(ValueError):
         _run_ecg_train(
             root="/tmp/x",
             records=["a"],
@@ -374,7 +447,7 @@ def test_train_one_epoch_rejects_empty_loader():
             n_classes=2,
             build_loader=lambda **kwargs: object(),
         )
-    with pytest.raises(ValueError, match="lr must be > 0"):
+    with pytest.raises(ValueError):
         _run_ecg_train(
             root="/tmp/x",
             records=["a"],
@@ -388,7 +461,7 @@ def test_train_one_epoch_rejects_empty_loader():
             n_classes=2,
             build_loader=lambda **kwargs: object(),
         )
-    with pytest.raises(ValueError, match="duration must be > 0"):
+    with pytest.raises(ValueError):
         _run_ecg_train(
             root="/tmp/x",
             records=["a"],

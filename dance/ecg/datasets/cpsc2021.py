@@ -16,13 +16,18 @@ def read_cpsc2021_record(record_path: str | Path, lead: str | int = 0) -> dict:
         lead_idx = record.sig_name.index(lead)
     else:
         lead_idx = 0
+    fs = float(record.fs)
+    if fs <= 0:
+        raise ValueError(
+            f"Invalid sampling frequency {fs} for CPSC2021 record {record_path}."
+        )
     ann = wfdb.rdann(str(record_path), extension="atr")
     signal = record.p_signal[:, lead_idx].astype(np.float32)
-    episodes = episodes_from_wfdb_ann(ann.sample, list(ann.symbol), fs=float(record.fs))
+    episodes = episodes_from_wfdb_ann(ann.sample, list(ann.symbol), fs=fs)
     return {
         "record_id": Path(record_path).name,
         "signal": signal,
-        "fs": float(record.fs),
+        "fs": fs,
         "episodes": episodes,
     }
 

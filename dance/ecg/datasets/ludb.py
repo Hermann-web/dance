@@ -16,12 +16,15 @@ def read_ludb_record(record_path: str | Path, lead: str | int = 0) -> dict:
     else:
         lead_idx = 0
     ann = wfdb.rdann(str(record_path), extension="atr")
+    fs = float(record.fs)
+    if fs <= 0:
+        raise ValueError(f"Invalid sampling frequency {fs} for LUDB record {record_path}.")
     signal = record.p_signal[:, lead_idx].astype(np.float32)
     events = _events_from_wfdb_ann(ann.sample, list(ann.symbol))
     return {
         "record_id": Path(record_path).name,
         "signal": signal,
-        "fs": float(record.fs),
+        "fs": fs,
         "events": events,
     }
 

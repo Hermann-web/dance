@@ -16,20 +16,24 @@ def _parse_lead(value: str) -> str | int:
     raw = value.strip()
     if raw == "":
         raise ValueError("Lead cannot be empty.")
+    if "." in raw:
+        raise ValueError(
+            f"Lead {raw!r} is not valid: use an integer index (e.g. 0, -1) or lead name."
+        )
     try:
         return int(raw)
     except ValueError:
         return raw
 
 
-def _require_positive_int(name: str, value: int) -> None:
-    if value <= 0:
-        raise ValueError(f"{name} must be > 0, got {value}.")
-
-
-def _require_positive_float(name: str, value: float) -> None:
-    if value <= 0:
-        raise ValueError(f"{name} must be > 0, got {value}.")
+class _EcgCliTrainConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    batch_size: PositiveInt
+    epochs: PositiveInt
+    n_queries: PositiveInt
+    n_classes: PositiveInt
+    lr: PositiveFloat
+    duration: PositiveFloat
 
 
 def _run_ecg_train(
@@ -51,12 +55,14 @@ def _run_ecg_train(
     from ..dance import Dance
     from ..ecg.training import train_one_epoch
 
-    _require_positive_int("batch_size", batch_size)
-    _require_positive_int("epochs", epochs)
-    _require_positive_int("n_queries", n_queries)
-    _require_positive_int("n_classes", n_classes)
-    _require_positive_float("lr", lr)
-    _require_positive_float("duration", duration)
+    _EcgCliTrainConfig(
+        batch_size=batch_size,
+        epochs=epochs,
+        n_queries=n_queries,
+        n_classes=n_classes,
+        lr=lr,
+        duration=duration,
+    )
     if not records:
         raise ValueError("records must contain at least one record id.")
     loader = build_loader(

@@ -19,6 +19,8 @@ def build_ludb_loader(
     batch_size: int = 8,
     shuffle: bool = True,
 ) -> DataLoader:
+    if not record_ids:
+        raise ValueError("build_ludb_loader requires at least one record id.")
     ds = LudbDataset(root=root, record_ids=record_ids, lead=lead)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, collate_fn=ludb_collate)
 
@@ -31,6 +33,8 @@ def build_cpsc2021_loader(
     batch_size: int = 8,
     shuffle: bool = True,
 ) -> DataLoader:
+    if not record_ids:
+        raise ValueError("build_cpsc2021_loader requires at least one record id.")
     ds = Cpsc2021Dataset(root=root, record_ids=record_ids, lead=lead)
     return DataLoader(
         ds,
