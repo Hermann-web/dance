@@ -321,11 +321,7 @@ def test_cli_train_rejects_non_positive_numeric_args():
     from dance.cli.main import _run_ecg_train
 
     with pytest.raises(ValueError, match="batch_size must be > 0"):
-        _run_ecg_train(
             root="/tmp/x",
-            records=["a"],
-            lead=0,
-            batch_size=0,
             lr=1e-3,
             epochs=1,
             duration=1.0,
