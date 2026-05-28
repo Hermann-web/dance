@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import torch
 import types
 
@@ -245,3 +246,10 @@ def test_cpsc_loader_and_cli_command(monkeypatch, tmp_path):
         ]
     )
     assert rc == 0
+
+
+def test_shared_collate_rejects_empty_batch():
+    with pytest.raises(ValueError):
+        ludb_collate([])
+    with pytest.raises(ValueError):
+        cpsc2021_collate([])
