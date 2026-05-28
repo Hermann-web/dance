@@ -14,6 +14,7 @@ from dance.ecg.metrics import (
     EcgWaveDelineationF1,
     as_event_lists,
 )
+from dance.ecg.training import build_ludb_loader, train_one_epoch
 from dance.tests.test_dance import _TinyDance
 
 
@@ -89,3 +90,13 @@ def test_ecg_tolerance_f1():
     tgt = [[(0.11, 0.31, 1), (0.48, 0.69, 2)]]
     metric.update(pred, tgt)
     assert torch.isclose(metric.compute(), torch.tensor(1.0))
+
+
+def test_ecg_training_entrypoint_one_epoch(monkeypatch, tmp_path):
+    fake = types.SimpleNamespace(rdrecord=lambda *a, **k: _FakeRecord(), rdann=lambda *a, **k: _FakeAnn())
+    monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
+    loader = build_ludb_loader(tmp_path, ["rec_01", "rec_02"], batch_size=2, shuffle=False)
+    model = _TinyDance(n_channels=1, n_classes=4, n_queries=8, duration=1.0)
+    optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    loss = train_one_epoch(model, loader, optim)
+    assert loss >= 0.0

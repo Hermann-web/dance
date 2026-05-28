@@ -263,7 +263,7 @@ Done when:
 - [ ] Add explicit dependencies required by the ECG path.
 - [ ] Decide whether `Dance` needs a public `signal` alias or whether the ECG
       adapter should remain the only compatibility boundary.
-- [ ] Add a minimal training entrypoint for the standalone ECG path.
+- [x] Add a minimal training entrypoint for the standalone ECG path.
 - [ ] Integrate ECG into the CLI/config system only after the standalone path
       is stable.
 
@@ -343,3 +343,5 @@ Known current gap:
   ECG metric wrapper + event conversion helper.
 - Added `docs/artifacts/ecg-event-schema.md` and
   `docs/artifacts/ludb-data-contract.md` to lock contracts.
+- Added standalone ECG training bootstrap in `dance.ecg.training` plus
+  `docs/artifacts/ecg-training-entrypoint.md`.
