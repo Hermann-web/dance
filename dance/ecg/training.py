@@ -15,10 +15,11 @@ def build_ludb_loader(
     root: str | Path,
     record_ids: list[str],
     *,
+    lead: str | int = 0,
     batch_size: int = 8,
     shuffle: bool = True,
 ) -> DataLoader:
-    ds = LudbDataset(root=root, record_ids=record_ids)
+    ds = LudbDataset(root=root, record_ids=record_ids, lead=lead)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, collate_fn=ludb_collate)
 
 
@@ -26,10 +27,11 @@ def build_cpsc2021_loader(
     root: str | Path,
     record_ids: list[str],
     *,
+    lead: str | int = 0,
     batch_size: int = 8,
     shuffle: bool = True,
 ) -> DataLoader:
-    ds = Cpsc2021Dataset(root=root, record_ids=record_ids)
+    ds = Cpsc2021Dataset(root=root, record_ids=record_ids, lead=lead)
     return DataLoader(
         ds,
         batch_size=batch_size,
@@ -45,6 +47,8 @@ def train_one_epoch(
     *,
     device: str = "cpu",
 ) -> float:
+    if len(loader) == 0:
+        raise ValueError("train_one_epoch received an empty loader.")
     model.train()
     total = 0.0
     steps = 0

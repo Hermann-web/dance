@@ -9,10 +9,32 @@ from .. import __version__
 from .helpers import build_config, list_datasets
 
 
+def _parse_lead(value: str) -> str | int:
+    """Parse CLI lead argument as int index or lead-name string."""
+    raw = value.strip()
+    if raw == "":
+        raise ValueError("Lead cannot be empty.")
+    try:
+        return int(raw)
+    except ValueError:
+        return raw
+
+
+def _require_positive_int(name: str, value: int) -> None:
+    if value <= 0:
+        raise ValueError(f"{name} must be > 0, got {value}.")
+
+
+def _require_positive_float(name: str, value: float) -> None:
+    if value <= 0:
+        raise ValueError(f"{name} must be > 0, got {value}.")
+
+
 def _run_ecg_train(
     *,
     root: str,
     records: list[str],
+    lead: str | int,
     batch_size: int,
     lr: float,
     epochs: int,
@@ -27,9 +49,18 @@ def _run_ecg_train(
     from ..dance import Dance
     from ..ecg.training import train_one_epoch
 
+    _require_positive_int("batch_size", batch_size)
+    _require_positive_int("epochs", epochs)
+    _require_positive_int("n_queries", n_queries)
+    _require_positive_int("n_classes", n_classes)
+    _require_positive_float("lr", lr)
+    _require_positive_float("duration", duration)
+    if not records:
+        raise ValueError("records must contain at least one record id.")
     loader = build_loader(
         root=root,
         record_ids=records,
+        lead=lead,
         batch_size=batch_size,
         shuffle=True,
     )
@@ -64,6 +95,7 @@ def _build_argparser() -> argparse.ArgumentParser:
         help="Record stems (e.g. 1 2 3...) to train on.",
     )
     ecg.add_argument("--batch-size", type=int, default=8)
+    ecg.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
     ecg.add_argument("--lr", type=float, default=1e-3)
     ecg.add_argument("--epochs", type=int, default=1)
     ecg.add_argument("--duration", type=float, default=1.0)
@@ -76,6 +108,7 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg_rhythm.add_argument("--root", required=True, help="CPSC2021 root folder.")
     ecg_rhythm.add_argument("--records", nargs="+", required=True, help="Record stems.")
     ecg_rhythm.add_argument("--batch-size", type=int, default=8)
+    ecg_rhythm.add_argument("--lead", type=str, default="0", help="Lead index or lead name.")
     ecg_rhythm.add_argument("--lr", type=float, default=1e-3)
     ecg_rhythm.add_argument("--epochs", type=int, default=1)
     ecg_rhythm.add_argument("--duration", type=float, default=1.0)
@@ -190,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run_ecg_train(
             root=args.root,
             records=args.records,
+            lead=_parse_lead(args.lead),
             batch_size=args.batch_size,
             duration=args.duration,
             n_queries=args.n_queries,
@@ -206,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run_ecg_train(
             root=args.root,
             records=args.records,
+            lead=_parse_lead(args.lead),
             batch_size=args.batch_size,
             duration=args.duration,
             n_queries=args.n_queries,

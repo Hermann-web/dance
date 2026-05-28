@@ -116,7 +116,13 @@ def test_ecg_training_entrypoint_one_epoch(monkeypatch, tmp_path):
 def test_cli_ecg_ludb_train_command(monkeypatch):
     from dance.cli.main import main
 
-    monkeypatch.setattr("dance.ecg.training.build_ludb_loader", lambda **kwargs: object())
+    seen = {}
+
+    def _fake_loader(**kwargs):
+        seen.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("dance.ecg.training.build_ludb_loader", _fake_loader)
 
     class _FakeModel:
         def parameters(self):
@@ -138,9 +144,12 @@ def test_cli_ecg_ludb_train_command(monkeypatch):
             "rec_02",
             "--epochs",
             "1",
+            "--lead",
+            "V2",
         ]
     )
     assert rc == 0
+    assert seen["lead"] == "V2"
 
 
 def test_cpsc_episode_merge_and_metrics():
@@ -235,7 +244,13 @@ def test_cpsc_loader_and_cli_command(monkeypatch, tmp_path):
 
     from dance.cli.main import main
 
-    monkeypatch.setattr("dance.ecg.training.build_cpsc2021_loader", lambda **kwargs: object())
+    seen = {}
+
+    def _fake_loader(**kwargs):
+        seen.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("dance.ecg.training.build_cpsc2021_loader", _fake_loader)
 
     class _FakeModel:
         def parameters(self):
@@ -255,9 +270,12 @@ def test_cpsc_loader_and_cli_command(monkeypatch, tmp_path):
             "A001",
             "--epochs",
             "1",
+            "--lead",
+            "1",
         ]
     )
     assert rc == 0
+    assert seen["lead"] == 1
 
 
 def test_shared_collate_rejects_empty_batch():
@@ -287,3 +305,118 @@ def test_adapter_validation_rejects_out_of_range_boundaries():
     }
     with pytest.raises(ValueError, match="normalized to \\[0, 1\\]"):
         ecg_batch_to_dance_batch(batch)
+
+
+def test_cli_parse_lead_helper():
+    from dance.cli.main import _parse_lead
+
+    assert _parse_lead("1") == 1
+    assert _parse_lead("-2") == -2
+    assert _parse_lead("V1") == "V1"
+    with pytest.raises(ValueError, match="cannot be empty"):
+        _parse_lead("   ")
+
+
+def test_cli_train_rejects_non_positive_numeric_args():
+    from dance.cli.main import _run_ecg_train
+
+    with pytest.raises(ValueError, match="batch_size must be > 0"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=0,
+            lr=1e-3,
+            epochs=1,
+            duration=1.0,
+            n_queries=8,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
+
+
+def test_train_one_epoch_rejects_empty_loader():
+    from dance.cli.main import _run_ecg_train
+
+    class _EmptyLoader:
+        def __len__(self):
+            return 0
+
+        def __iter__(self):
+            return iter(())
+
+    model = _TinyDance(n_channels=1, n_classes=4, n_queries=8, duration=1.0)
+    optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    with pytest.raises(ValueError, match="empty loader"):
+        train_one_epoch(model, _EmptyLoader(), optim)
+    with pytest.raises(ValueError, match="epochs must be > 0"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=1,
+            lr=1e-3,
+            epochs=0,
+            duration=1.0,
+            n_queries=8,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
+    with pytest.raises(ValueError, match="n_queries must be > 0"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=1,
+            lr=1e-3,
+            epochs=1,
+            duration=1.0,
+            n_queries=0,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
+    with pytest.raises(ValueError, match="lr must be > 0"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=1,
+            lr=0.0,
+            epochs=1,
+            duration=1.0,
+            n_queries=8,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
+    with pytest.raises(ValueError, match="duration must be > 0"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=["a"],
+            lead=0,
+            batch_size=1,
+            lr=1e-3,
+            epochs=1,
+            duration=0.0,
+            n_queries=8,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
+    with pytest.raises(ValueError, match="records must contain at least one"):
+        _run_ecg_train(
+            root="/tmp/x",
+            records=[],
+            lead=0,
+            batch_size=1,
+            lr=1e-3,
+            epochs=1,
+            duration=1.0,
+            n_queries=8,
+            device="cpu",
+            n_classes=2,
+            build_loader=lambda **kwargs: object(),
+        )
