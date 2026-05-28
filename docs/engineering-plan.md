@@ -280,7 +280,7 @@ Done when:
 - [x] Implement rhythm episode preprocessing and event merging rules.
 - [x] Add episode metrics:
       episode F1, onset delay, offset delay, and burden error.
-- [ ] Add sampling and class-imbalance handling appropriate for rare rhythm
+- [x] Add sampling and class-imbalance handling appropriate for rare rhythm
       episodes.
 
 Done when:
@@ -351,3 +351,5 @@ Known current gap:
   LUDB training runs via ECG modules.
 - Added initial CPSC2021 WFDB reader + AF episode conversion/merge and initial
   rhythm metric surface (episode F1, onset delay, offset delay, burden error).
+- Added initial CPSC2021 dataset/collate and weighted sampler helper for
+  AF-episode class imbalance handling.

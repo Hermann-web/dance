@@ -20,6 +20,11 @@ from dance.ecg.metrics import (
 )
 from dance.ecg.datasets.cpsc2021 import episodes_from_wfdb_ann
 from dance.ecg.training import build_ludb_loader, train_one_epoch
+from dance.ecg.rhythm_data import (
+    Cpsc2021Dataset,
+    build_rhythm_weighted_sampler,
+    cpsc2021_collate,
+)
 from dance.tests.test_dance import _TinyDance
 
 
@@ -161,3 +166,35 @@ def test_cpsc_episode_merge_and_metrics():
     assert torch.isclose(onset.compute(), torch.tensor(0.02))
     assert torch.isclose(offset.compute(), torch.tensor(0.02))
     assert torch.isclose(burden.compute(), torch.tensor(0.0))
+
+
+def test_cpsc_dataset_collate_and_weighted_sampler(monkeypatch, tmp_path):
+    class _CRecord:
+        fs = 100.0
+        sig_name = ["I"]
+        p_signal = np.arange(40, dtype=np.float32).reshape(40, 1)
+
+    class _CAnnPos:
+        sample = [10, 30]
+        symbol = ["(AFIB", ")AFIB"]
+
+    class _CAnnNeg:
+        sample = []
+        symbol = []
+
+    def _rdrecord(*args, **kwargs):
+        return _CRecord()
+
+    def _rdann(path, extension):
+        return _CAnnPos() if str(path).endswith("pos") else _CAnnNeg()
+
+    fake = types.SimpleNamespace(rdrecord=_rdrecord, rdann=_rdann)
+    monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
+
+    ds = Cpsc2021Dataset(root=tmp_path, record_ids=["pos", "neg"])
+    batch = cpsc2021_collate([ds[0], ds[1]])
+    assert batch["eeg"].shape == (2, 1, 40)
+    assert batch["class"].shape[1] >= 1
+    sampler = build_rhythm_weighted_sampler(ds, positive_weight=7.0, negative_weight=1.0)
+    w = sampler.weights.tolist()
+    assert w[0] == 7.0 and w[1] == 1.0
