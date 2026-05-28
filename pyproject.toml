@@ -31,6 +31,9 @@ dependencies = [
     "scikit-learn>=1.0",
     "pandas",
     "numpy",
+    "scipy",
+    "check-shapes",
+    "wfdb>=4.1",
 ]
 
 [project.optional-dependencies]

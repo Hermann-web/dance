@@ -242,14 +242,14 @@ Done when:
 
 ### Phase 1: LUDB ECG Baseline
 
-- [ ] Create `dance/ecg/` as the owned ECG implementation surface.
-- [ ] Implement LUDB loading with `WFDB`.
-- [ ] Convert LUDB wave delineation annotations into ECG-native interval events.
-- [ ] Define a collate path that feeds the existing `Dance` model through a
+- [x] Create `dance/ecg/` as the owned ECG implementation surface.
+- [x] Implement LUDB loading with `WFDB`.
+- [x] Convert LUDB wave delineation annotations into ECG-native interval events.
+- [x] Define a collate path that feeds the existing `Dance` model through a
       narrow adapter rather than through `neuralset`.
-- [ ] Implement wave-delineation metrics:
+- [x] Implement wave-delineation metrics:
       onset MAE, offset MAE, tolerance F1, and interval event F1.
-- [ ] Add tests for the LUDB reader, event conversion, batch contract, and
+- [x] Add tests for the LUDB reader, event conversion, batch contract, and
       metrics.
 
 Done when:
@@ -260,11 +260,11 @@ Done when:
 
 ### Phase 2: Training Surface and Hygiene
 
-- [ ] Add explicit dependencies required by the ECG path.
-- [ ] Decide whether `Dance` needs a public `signal` alias or whether the ECG
+- [x] Add explicit dependencies required by the ECG path.
+- [x] Decide whether `Dance` needs a public `signal` alias or whether the ECG
       adapter should remain the only compatibility boundary.
-- [ ] Add a minimal training entrypoint for the standalone ECG path.
-- [ ] Integrate ECG into the CLI/config system only after the standalone path
+- [x] Add a minimal training entrypoint for the standalone ECG path.
+- [x] Integrate ECG into the CLI/config system only after the standalone path
       is stable.
 
 Done when:
@@ -275,12 +275,12 @@ Done when:
 
 ### Phase 3: CPSC2021 Clinical Follow-On
 
-- [ ] Add `CPSC2021` ingestion via `WFDB` or dataset-native wrappers that still
+- [x] Add `CPSC2021` ingestion via `WFDB` or dataset-native wrappers that still
       terminate in the same ECG event schema.
-- [ ] Implement rhythm episode preprocessing and event merging rules.
-- [ ] Add episode metrics:
+- [x] Implement rhythm episode preprocessing and event merging rules.
+- [x] Add episode metrics:
       episode F1, onset delay, offset delay, and burden error.
-- [ ] Add sampling and class-imbalance handling appropriate for rare rhythm
+- [x] Add sampling and class-imbalance handling appropriate for rare rhythm
       episodes.
 
 Done when:
@@ -338,3 +338,20 @@ Known current gap:
   generation for core training.
 - Data-layer decision frozen: custom PyTorch ECG dataloader first, `neuralset`
   later if still useful.
+- Implemented `dance/ecg/` Phase 1 baseline surface with LUDB WFDB reader,
+  ECG-native wave schema, custom dataset/collate, compatibility adapter, and
+  ECG metric wrapper + event conversion helper.
+- Added `docs/artifacts/ecg-event-schema.md` and
+  `docs/artifacts/ludb-data-contract.md` to lock contracts.
+- Added standalone ECG training bootstrap in `dance.ecg.training` plus
+  `docs/artifacts/ecg-training-entrypoint.md`.
+- Added `Dance.forward` compatibility for `signal` alias (mapped to canonical
+  internal `eeg`) while retaining ECG adapter as primary boundary.
+- Added standalone CLI command `dance ecg-ludb-train` for repository-native
+  LUDB training runs via ECG modules.
+- Added initial CPSC2021 WFDB reader + AF episode conversion/merge and initial
+  rhythm metric surface (episode F1, onset delay, offset delay, burden error).
+- Added initial CPSC2021 dataset/collate and weighted sampler helper for
+  AF-episode class imbalance handling.
+- Added `build_cpsc2021_loader` and CLI command `dance ecg-cpsc2021-train` so
+  the same standalone ECG training surface now runs both LUDB and CPSC2021.

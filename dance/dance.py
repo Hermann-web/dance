@@ -162,6 +162,8 @@ class Dance(nn.Module):
         return dense
 
     def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        if "eeg" not in batch and "signal" in batch:
+            batch = {**batch, "eeg": batch["signal"]}
         encoder_output = self.encoder(
             batch["eeg"],
             channel_positions=batch.get("channel_positions"),
