@@ -353,3 +353,5 @@ Known current gap:
   rhythm metric surface (episode F1, onset delay, offset delay, burden error).
 - Added initial CPSC2021 dataset/collate and weighted sampler helper for
   AF-episode class imbalance handling.
+- Added `build_cpsc2021_loader` and CLI command `dance ecg-cpsc2021-train` so
+  the same standalone ECG training surface now runs both LUDB and CPSC2021.

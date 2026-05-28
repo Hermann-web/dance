@@ -32,6 +32,18 @@ def _build_argparser() -> argparse.ArgumentParser:
     ecg.add_argument("--duration", type=float, default=1.0)
     ecg.add_argument("--n-queries", type=int, default=64)
     ecg.add_argument("--device", type=str, default="cpu")
+    ecg_rhythm = sub.add_parser(
+        "ecg-cpsc2021-train",
+        help="Run minimal standalone ECG CPSC2021 rhythm training.",
+    )
+    ecg_rhythm.add_argument("--root", required=True, help="CPSC2021 root folder.")
+    ecg_rhythm.add_argument("--records", nargs="+", required=True, help="Record stems.")
+    ecg_rhythm.add_argument("--batch-size", type=int, default=8)
+    ecg_rhythm.add_argument("--lr", type=float, default=1e-3)
+    ecg_rhythm.add_argument("--epochs", type=int, default=1)
+    ecg_rhythm.add_argument("--duration", type=float, default=1.0)
+    ecg_rhythm.add_argument("--n-queries", type=int, default=64)
+    ecg_rhythm.add_argument("--device", type=str, default="cpu")
 
     run = sub.add_parser("run", help="Train + test DANCE on one dataset.")
     run.add_argument("dataset", help="Dataset slug (see `dance list-datasets`).")
@@ -150,6 +162,30 @@ def main(argv: list[str] | None = None) -> int:
         model = Dance(
             n_channels=1,
             n_classes=len(WAVE_CLASS_TO_ID),
+            n_queries=args.n_queries,
+            duration=args.duration,
+        )
+        optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
+        for epoch in range(args.epochs):
+            loss = train_one_epoch(model, loader, optim, device=args.device)
+            print(f"epoch={epoch + 1} loss={loss:.6f}")
+        return 0
+    if args.cmd == "ecg-cpsc2021-train":
+        import torch
+
+        from ..dance import Dance
+        from ..ecg.events import RHYTHM_CLASS_TO_ID
+        from ..ecg.training import build_cpsc2021_loader, train_one_epoch
+
+        loader = build_cpsc2021_loader(
+            root=args.root,
+            record_ids=args.records,
+            batch_size=args.batch_size,
+            shuffle=True,
+        )
+        model = Dance(
+            n_channels=1,
+            n_classes=len(RHYTHM_CLASS_TO_ID),
             n_queries=args.n_queries,
             duration=args.duration,
         )

@@ -19,7 +19,7 @@ from dance.ecg.metrics import (
     as_event_lists,
 )
 from dance.ecg.datasets.cpsc2021 import episodes_from_wfdb_ann
-from dance.ecg.training import build_ludb_loader, train_one_epoch
+from dance.ecg.training import build_cpsc2021_loader, build_ludb_loader, train_one_epoch
 from dance.ecg.rhythm_data import (
     Cpsc2021Dataset,
     build_rhythm_weighted_sampler,
@@ -198,3 +198,50 @@ def test_cpsc_dataset_collate_and_weighted_sampler(monkeypatch, tmp_path):
     sampler = build_rhythm_weighted_sampler(ds, positive_weight=7.0, negative_weight=1.0)
     w = sampler.weights.tolist()
     assert w[0] == 7.0 and w[1] == 1.0
+
+
+def test_cpsc_loader_and_cli_command(monkeypatch, tmp_path):
+    class _CRecord:
+        fs = 100.0
+        sig_name = ["I"]
+        p_signal = np.arange(40, dtype=np.float32).reshape(40, 1)
+
+    class _CAnn:
+        sample = [10, 30]
+        symbol = ["(AFIB", ")AFIB"]
+
+    fake = types.SimpleNamespace(
+        rdrecord=lambda *a, **k: _CRecord(),
+        rdann=lambda *a, **k: _CAnn(),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "wfdb", fake)
+
+    loader = build_cpsc2021_loader(tmp_path, ["rec_01"], batch_size=1, shuffle=False)
+    batch = next(iter(loader))
+    assert batch["eeg"].shape == (1, 1, 40)
+
+    from dance.cli.main import main
+
+    monkeypatch.setattr("dance.ecg.training.build_cpsc2021_loader", lambda **kwargs: object())
+
+    class _FakeModel:
+        def parameters(self):
+            return [torch.nn.Parameter(torch.zeros(()))]
+
+    monkeypatch.setattr("dance.dance.Dance", lambda **kwargs: _FakeModel())
+    monkeypatch.setattr(
+        "dance.ecg.training.train_one_epoch",
+        lambda model, loader, optimizer, device="cpu": 0.321,
+    )
+    rc = main(
+        [
+            "ecg-cpsc2021-train",
+            "--root",
+            "/tmp/cpsc2021",
+            "--records",
+            "A001",
+            "--epochs",
+            "1",
+        ]
+    )
+    assert rc == 0

@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from ..dance import Dance
 from .adapters import ecg_batch_to_dance_batch
 from .data import LudbDataset, ludb_collate
+from .rhythm_data import Cpsc2021Dataset, cpsc2021_collate
 
 
 def build_ludb_loader(
@@ -19,6 +20,22 @@ def build_ludb_loader(
 ) -> DataLoader:
     ds = LudbDataset(root=root, record_ids=record_ids)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, collate_fn=ludb_collate)
+
+
+def build_cpsc2021_loader(
+    root: str | Path,
+    record_ids: list[str],
+    *,
+    batch_size: int = 8,
+    shuffle: bool = True,
+) -> DataLoader:
+    ds = Cpsc2021Dataset(root=root, record_ids=record_ids)
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=cpsc2021_collate,
+    )
 
 
 def train_one_epoch(
