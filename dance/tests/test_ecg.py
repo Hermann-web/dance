@@ -100,3 +100,33 @@ def test_ecg_training_entrypoint_one_epoch(monkeypatch, tmp_path):
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     loss = train_one_epoch(model, loader, optim)
     assert loss >= 0.0
+
+
+def test_cli_ecg_ludb_train_command(monkeypatch):
+    from dance.cli.main import main
+
+    monkeypatch.setattr("dance.ecg.training.build_ludb_loader", lambda **kwargs: object())
+
+    class _FakeModel:
+        def parameters(self):
+            return [torch.nn.Parameter(torch.zeros(()))]
+
+    monkeypatch.setattr("dance.dance.Dance", lambda **kwargs: _FakeModel())
+    monkeypatch.setattr(
+        "dance.ecg.training.train_one_epoch",
+        lambda model, loader, optimizer, device="cpu": 0.123,
+    )
+
+    rc = main(
+        [
+            "ecg-ludb-train",
+            "--root",
+            "/tmp/ludb",
+            "--records",
+            "rec_01",
+            "rec_02",
+            "--epochs",
+            "1",
+        ]
+    )
+    assert rc == 0

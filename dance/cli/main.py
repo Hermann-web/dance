@@ -18,6 +18,20 @@ def _build_argparser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list-datasets", help="Print the available dataset slugs.")
+    ecg = sub.add_parser("ecg-ludb-train", help="Run minimal standalone ECG LUDB training.")
+    ecg.add_argument("--root", required=True, help="LUDB root folder with WFDB record files.")
+    ecg.add_argument(
+        "--records",
+        nargs="+",
+        required=True,
+        help="Record stems (e.g. 1 2 3...) to train on.",
+    )
+    ecg.add_argument("--batch-size", type=int, default=8)
+    ecg.add_argument("--lr", type=float, default=1e-3)
+    ecg.add_argument("--epochs", type=int, default=1)
+    ecg.add_argument("--duration", type=float, default=1.0)
+    ecg.add_argument("--n-queries", type=int, default=64)
+    ecg.add_argument("--device", type=str, default="cpu")
 
     run = sub.add_parser("run", help="Train + test DANCE on one dataset.")
     run.add_argument("dataset", help="Dataset slug (see `dance list-datasets`).")
@@ -119,6 +133,30 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "list-datasets":
         print("\n".join(list_datasets()))
+        return 0
+    if args.cmd == "ecg-ludb-train":
+        import torch
+
+        from ..dance import Dance
+        from ..ecg.training import build_ludb_loader, train_one_epoch
+        from ..ecg.events import WAVE_CLASS_TO_ID
+
+        loader = build_ludb_loader(
+            root=args.root,
+            record_ids=args.records,
+            batch_size=args.batch_size,
+            shuffle=True,
+        )
+        model = Dance(
+            n_channels=1,
+            n_classes=len(WAVE_CLASS_TO_ID),
+            n_queries=args.n_queries,
+            duration=args.duration,
+        )
+        optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
+        for epoch in range(args.epochs):
+            loss = train_one_epoch(model, loader, optim, device=args.device)
+            print(f"epoch={epoch + 1} loss={loss:.6f}")
         return 0
 
     if args.cmd == "run":
