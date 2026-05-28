@@ -134,6 +134,14 @@ def test_dance_forward_inference_only_when_no_targets():
     assert out["pred_class"].shape == (2, 5, 3)
 
 
+def test_dance_accepts_signal_alias_for_ecg_compat():
+    """ECG path may pass `signal`; model maps it to canonical `eeg`."""
+    model = _tiny_model()
+    out = model({"signal": torch.randn(2, 4, 64), "channel_positions": torch.rand(2, 4, 2)})
+    assert "loss" not in out
+    assert out["pred_class"].shape == (2, 5, 3)
+
+
 def test_dance_with_merger_is_channel_agnostic():
     """The ChannelMerger lets the same model handle different channel counts."""
     model = _tiny_model(n_channels=4)

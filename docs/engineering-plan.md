@@ -261,7 +261,7 @@ Done when:
 ### Phase 2: Training Surface and Hygiene
 
 - [ ] Add explicit dependencies required by the ECG path.
-- [ ] Decide whether `Dance` needs a public `signal` alias or whether the ECG
+- [x] Decide whether `Dance` needs a public `signal` alias or whether the ECG
       adapter should remain the only compatibility boundary.
 - [x] Add a minimal training entrypoint for the standalone ECG path.
 - [ ] Integrate ECG into the CLI/config system only after the standalone path
@@ -345,3 +345,5 @@ Known current gap:
   `docs/artifacts/ludb-data-contract.md` to lock contracts.
 - Added standalone ECG training bootstrap in `dance.ecg.training` plus
   `docs/artifacts/ecg-training-entrypoint.md`.
+- Added `Dance.forward` compatibility for `signal` alias (mapped to canonical
+  internal `eeg`) while retaining ECG adapter as primary boundary.
