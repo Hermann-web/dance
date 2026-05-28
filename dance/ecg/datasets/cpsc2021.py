@@ -34,12 +34,23 @@ def episodes_from_wfdb_ann(
     fs: float,
     merge_gap_seconds: float = 0.0,
 ) -> list[EcgRhythmEpisode]:
-    starts: list[int] = [int(s) for s, sym in zip(samples, symbols) if sym == "(AFIB"]
-    ends: list[int] = [int(s) for s, sym in zip(samples, symbols) if sym == ")AFIB"]
     out: list[EcgRhythmEpisode] = []
-    for s, e in zip(starts, ends):
-        if e > s:
-            out.append(EcgRhythmEpisode(label="af_episode", onset=s, offset=e))
+    open_start: int | None = None
+    for s, sym in zip(samples, symbols):
+        sample = int(s)
+        if sym == "(AFIB":
+            open_start = sample
+            continue
+        if sym == ")AFIB" and open_start is not None:
+            if sample > open_start:
+                out.append(
+                    EcgRhythmEpisode(
+                        label="af_episode",
+                        onset=open_start,
+                        offset=sample,
+                    )
+                )
+            open_start = None
     if not out:
         return out
     if merge_gap_seconds <= 0:

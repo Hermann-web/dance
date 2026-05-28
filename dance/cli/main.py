@@ -9,6 +9,43 @@ from .. import __version__
 from .helpers import build_config, list_datasets
 
 
+def _run_ecg_train(
+    *,
+    root: str,
+    records: list[str],
+    batch_size: int,
+    lr: float,
+    epochs: int,
+    duration: float,
+    n_queries: int,
+    device: str,
+    n_classes: int,
+    build_loader,
+) -> int:
+    import torch
+
+    from ..dance import Dance
+    from ..ecg.training import train_one_epoch
+
+    loader = build_loader(
+        root=root,
+        record_ids=records,
+        batch_size=batch_size,
+        shuffle=True,
+    )
+    model = Dance(
+        n_channels=1,
+        n_classes=n_classes,
+        n_queries=n_queries,
+        duration=duration,
+    )
+    optim = torch.optim.AdamW(model.parameters(), lr=lr)
+    for epoch in range(epochs):
+        loss = train_one_epoch(model, loader, optim, device=device)
+        print(f"epoch={epoch + 1} loss={loss:.6f}")
+    return 0
+
+
 def _build_argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dance",
@@ -147,53 +184,37 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(list_datasets()))
         return 0
     if args.cmd == "ecg-ludb-train":
-        import torch
-
-        from ..dance import Dance
-        from ..ecg.training import build_ludb_loader, train_one_epoch
         from ..ecg.events import WAVE_CLASS_TO_ID
+        from ..ecg.training import build_ludb_loader
 
-        loader = build_ludb_loader(
+        return _run_ecg_train(
             root=args.root,
-            record_ids=args.records,
+            records=args.records,
             batch_size=args.batch_size,
-            shuffle=True,
-        )
-        model = Dance(
-            n_channels=1,
+            duration=args.duration,
+            n_queries=args.n_queries,
+            lr=args.lr,
+            epochs=args.epochs,
+            device=args.device,
             n_classes=len(WAVE_CLASS_TO_ID),
-            n_queries=args.n_queries,
-            duration=args.duration,
+            build_loader=build_ludb_loader,
         )
-        optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
-        for epoch in range(args.epochs):
-            loss = train_one_epoch(model, loader, optim, device=args.device)
-            print(f"epoch={epoch + 1} loss={loss:.6f}")
-        return 0
     if args.cmd == "ecg-cpsc2021-train":
-        import torch
-
-        from ..dance import Dance
         from ..ecg.events import RHYTHM_CLASS_TO_ID
-        from ..ecg.training import build_cpsc2021_loader, train_one_epoch
+        from ..ecg.training import build_cpsc2021_loader
 
-        loader = build_cpsc2021_loader(
+        return _run_ecg_train(
             root=args.root,
-            record_ids=args.records,
+            records=args.records,
             batch_size=args.batch_size,
-            shuffle=True,
-        )
-        model = Dance(
-            n_channels=1,
-            n_classes=len(RHYTHM_CLASS_TO_ID),
-            n_queries=args.n_queries,
             duration=args.duration,
+            n_queries=args.n_queries,
+            lr=args.lr,
+            epochs=args.epochs,
+            device=args.device,
+            n_classes=len(RHYTHM_CLASS_TO_ID),
+            build_loader=build_cpsc2021_loader,
         )
-        optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
-        for epoch in range(args.epochs):
-            loss = train_one_epoch(model, loader, optim, device=args.device)
-            print(f"epoch={epoch + 1} loss={loss:.6f}")
-        return 0
 
     if args.cmd == "run":
         if args.submit or args.local:

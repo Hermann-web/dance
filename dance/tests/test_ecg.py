@@ -169,6 +169,18 @@ def test_cpsc_episode_merge_and_metrics():
     assert torch.isclose(burden.compute(), torch.tensor(0.0))
 
 
+def test_cpsc_episode_parsing_handles_unbalanced_markers():
+    episodes = episodes_from_wfdb_ann(
+        samples=[5, 10, 20, 30, 45],
+        symbols=[")AFIB", "(AFIB", "(AFIB", ")AFIB", ")AFIB"],
+        fs=100.0,
+    )
+    # leading close ignored; nested open resets start; trailing unmatched close ignored
+    assert len(episodes) == 1
+    assert episodes[0].onset == 20
+    assert episodes[0].offset == 30
+
+
 def test_cpsc_dataset_collate_and_weighted_sampler(monkeypatch, tmp_path):
     class _CRecord:
         fs = 100.0
@@ -253,3 +265,25 @@ def test_shared_collate_rejects_empty_batch():
         ludb_collate([])
     with pytest.raises(ValueError):
         cpsc2021_collate([])
+
+
+def test_adapter_validation_rejects_invalid_event_order():
+    batch = {
+        "eeg": torch.zeros(1, 1, 10),
+        "start": torch.tensor([[0.8]]),
+        "end": torch.tensor([[0.2]]),
+        "class": torch.tensor([[1]]),
+    }
+    with pytest.raises(ValueError, match="end < start"):
+        ecg_batch_to_dance_batch(batch)
+
+
+def test_adapter_validation_rejects_out_of_range_boundaries():
+    batch = {
+        "eeg": torch.zeros(1, 1, 10),
+        "start": torch.tensor([[-0.1]]),
+        "end": torch.tensor([[0.2]]),
+        "class": torch.tensor([[1]]),
+    }
+    with pytest.raises(ValueError, match="normalized to \\[0, 1\\]"):
+        ecg_batch_to_dance_batch(batch)
